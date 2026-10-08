@@ -1,0 +1,28 @@
+@import "../../app.wxss";
+
+.pills {
+  display: flex;
+  gap: 16rpx;
+}
+
+.pill {
+  flex: 1;
+  text-align: center;
+  padding: 14rpx 0;
+  border-radius: 999rpx;
+  background: #f4f6f5;
+  color: #3d4944;
+  font-size: 26rpx;
+}
+
+.pill.active {
+  background: #0f3d2e;
+  color: #fff;
+  font-weight: 600;
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}

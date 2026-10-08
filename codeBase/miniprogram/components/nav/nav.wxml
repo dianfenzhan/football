@@ -1,0 +1,7 @@
+<view class="nav">
+  <view class="nav-item {{current === 'home' ? 'active' : ''}}" data-url="/pages/home/home" bindtap="go">首页</view>
+  <view class="nav-item {{current === 'activities' ? 'active' : ''}}" data-url="/pages/activities/activities" bindtap="go">活动</view>
+  <view class="nav-item {{current === 'stats' ? 'active' : ''}}" data-url="/pages/stats/stats" bindtap="go">数据</view>
+  <view class="nav-item {{current === 'players' ? 'active' : ''}}" data-url="/pages/players/players" bindtap="go">球员</view>
+  <view class="nav-item {{current === 'me' ? 'active' : ''}}" data-url="/pages/me/me" bindtap="go">我的</view>
+</view>

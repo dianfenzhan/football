@@ -1,0 +1,30 @@
+---
+description: 闲聊改代码前先读 constitution-common 与项目档案；冒烟仅用户要求
+alwaysApply: true
+---
+
+# 闲聊也遵守 Constitution
+
+通用原则：`~/work/AI/template/docs/constitution-common.md`。  
+项目参数与专属要求：`.cursor/rules/project-profile.mdc`。  
+本规则不复述正文。改代码前先读它们。
+
+## 什么时候直接改
+
+- 用户直接说改什么、未敲 grill：本对话可以直接改；**不强制**服务层测试或冒烟。
+- 冒烟：仅当用户本轮明确要求时才跑；只覆盖本次改动。
+
+## Java 落盘后（档案「Java 版本」非「无」时）
+
+声称完成前：
+
+1. 跑档案「测试命令」，不绿不算完，MUST NOT 改弱断言凑绿。
+2. 读并执行 `.cursor/skills/clean-code/SKILL.md`。
+3. 用户要求冒烟时：用档案「本机验证 skill」，只测本次改动。
+
+不要只改完就停。方法论见 `~/work/AI/template/docs/sdd/dev-workflow.md` 与档案「方法论文档」。
+
+## 例
+
+- 「把这个过滤条件改一下」→ 直接改；不强制单测。
+- 「改完帮我冒烟一下」→ 才跑本机验证 skill，只盖本次。

@@ -1,0 +1,31 @@
+<view class="page">
+  <view class="card">
+    <view class="field">
+      <text class="label">标题</text>
+      <input class="input" value="{{title}}" bindinput="onTitle" />
+    </view>
+    <view class="field">
+      <text class="label">地点</text>
+      <input class="input" placeholder="球场" value="{{location}}" bindinput="onLocation" />
+    </view>
+    <view class="field">
+      <text class="label">日期</text>
+      <picker mode="date" value="{{date}}" bindchange="onDate">
+        <view class="picker-value">{{date}}</view>
+      </picker>
+    </view>
+    <view class="field">
+      <text class="label">时间</text>
+      <picker mode="time" value="{{time}}" bindchange="onTime">
+        <view class="picker-value">{{time}}</view>
+      </picker>
+    </view>
+    <view class="field" wx:for="{{teams}}" wx:key="_id">
+      <text class="label">{{item.name}} 人数</text>
+      <picker mode="selector" range="{{counts}}" value="{{quotas[item._id] - 1}}" data-team="{{item._id}}" bindchange="onQuota">
+        <view class="picker-value">{{quotas[item._id]}} 人</view>
+      </picker>
+    </view>
+    <button class="btn" loading="{{saving}}" bindtap="submit">创建</button>
+  </view>
+</view>

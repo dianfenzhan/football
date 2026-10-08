@@ -1,0 +1,40 @@
+<view class="screen">
+  <view class="brand">
+    <view class="brand-ball">⚽️</view>
+    <view class="brand-text">
+      <view class="brand-name">周三快乐足球联队</view>
+      <view class="brand-sub">快乐踢球，周三是主场</view>
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading">加载中</view>
+  <block wx:else>
+    <block wx:if="{{next}}">
+      <view class="hero" data-id="{{next._id}}" bindtap="open">
+        <view class="hero-top">
+          <view class="kicker">下一场</view>
+          <view class="countdown">{{next.countdown}}</view>
+        </view>
+        <view class="hero-title">{{next.title}}</view>
+        <view class="hero-meta">📅 {{next.dateText}} {{next.clock}}</view>
+        <view class="hero-meta">📍 {{next.location}}</view>
+        <view wx:for="{{next.quotas}}" wx:key="teamId" class="quota">
+          <view class="quota-head">
+            <text>{{item.teamName}}</text>
+            <text>{{item.signed}} / {{item.maxSignups}}</text>
+          </view>
+          <view class="bar"><view class="bar-fill" style="width: {{item.percent}}%;"></view></view>
+        </view>
+      </view>
+      <view wx:if="{{next.signedUp}}" class="signed-banner">✓ 已报名 · {{myTeamName}}</view>
+      <button wx:else class="btn hero" data-id="{{next._id}}" bindtap="open">⚽️ 去报名</button>
+    </block>
+    <view wx:else class="hero hero-empty">
+      <view class="empty-icon">🥅</view>
+      <view class="empty-title">最近没有球局</view>
+      <view class="empty-sub">等管理员安排一场，先看看别的</view>
+    </view>
+    <button wx:if="{{isAdmin && !next}}" class="btn hero" bindtap="create">＋ 新建活动</button>
+  </block>
+  <nav current="home" />
+</view>

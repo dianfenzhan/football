@@ -1,0 +1,7 @@
+{
+  "usingComponents": {
+    "nav": "/components/nav/nav"
+  },
+  "navigationBarTitleText": "周三足球",
+  "enableShareAppMessage": true
+}

@@ -1,0 +1,16 @@
+{
+  "name": "football-miniprogram",
+  "version": "1.0.0",
+  "private": true,
+  "description": "周三快乐足球联队小程序",
+  "scripts": {
+    "deploy:cloud": "node scripts/deploy-cloud.js",
+    "smoke": "node scripts/smoke-test.js",
+    "regression": "node scripts/regression-test.js",
+    "regression:restore": "node scripts/regression-restore.js"
+  },
+  "devDependencies": {
+    "miniprogram-automator": "^0.12.1",
+    "miniprogram-ci": "^2.0.10"
+  }
+}

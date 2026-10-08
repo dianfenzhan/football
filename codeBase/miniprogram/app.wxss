@@ -1,0 +1,127 @@
+page {
+  background: #f4f6f5;
+  color: #1c2421;
+  font-size: 28rpx;
+  line-height: 1.5;
+}
+
+.page {
+  padding: 24rpx 24rpx 160rpx;
+  box-sizing: border-box;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.title {
+  font-size: 34rpx;
+  font-weight: 600;
+}
+
+.muted {
+  color: #66706c;
+  font-size: 24rpx;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.btn {
+  background: #0f3d2e;
+  color: #fff;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  line-height: 2.4;
+  padding: 0 28rpx;
+}
+
+.btn.ghost {
+  background: #e7eeeb;
+  color: #0f3d2e;
+}
+
+.btn.warn {
+  background: #8c3a2f;
+}
+
+.btn[disabled] {
+  background: #c5cdc9;
+  color: #fff;
+}
+
+.field {
+  margin-bottom: 20rpx;
+}
+
+.field .label {
+  display: block;
+  margin-bottom: 8rpx;
+  color: #3d4944;
+}
+
+.input,
+.picker-value {
+  background: #f4f6f5;
+  border-radius: 12rpx;
+  padding: 16rpx 20rpx;
+}
+
+.avatar,
+.avatar-fallback {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.avatar-sm,
+.avatar-fallback.avatar-sm {
+  width: 48rpx;
+  height: 48rpx;
+}
+
+.avatar-fallback {
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-fallback.avatar-sm {
+  font-size: 22rpx;
+}
+
+.nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  background: #fff;
+  border-top: 1rpx solid #e3e8e6;
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 100;
+}
+
+.nav-item {
+  flex: 1;
+  text-align: center;
+  padding: 20rpx 0;
+  color: #66706c;
+  font-size: 26rpx;
+}
+
+.nav-item.active {
+  color: #0f3d2e;
+  font-weight: 600;
+}

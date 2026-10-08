@@ -1,0 +1,19 @@
+{
+  "pages": [
+    "pages/home/home",
+    "pages/activities/activities",
+    "pages/activity/activity",
+    "pages/activity-edit/activity-edit",
+    "pages/stats/stats",
+    "pages/players/players",
+    "pages/me/me"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#0f3d2e",
+    "navigationBarTitleText": "球队",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f4f6f5"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

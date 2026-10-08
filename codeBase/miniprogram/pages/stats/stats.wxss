@@ -1,0 +1,111 @@
+.spans {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-bottom: 20rpx;
+}
+
+.span {
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  background: #fff;
+  color: #3d4944;
+  font-size: 24rpx;
+}
+
+.span.on {
+  background: #0f3d2e;
+  color: #fff;
+}
+
+.board {
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 24rpx 24rpx 8rpx;
+  margin-bottom: 20rpx;
+}
+
+.board-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8rpx;
+}
+
+.board-title {
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.board-note {
+  color: #8a9691;
+  font-size: 22rpx;
+}
+
+.empty {
+  color: #66706c;
+  font-size: 26rpx;
+  padding: 12rpx 0;
+}
+
+.rank {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 18rpx 0;
+  border-top: 1rpx solid #eef2f0;
+}
+
+.badge {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 14rpx;
+  background: #e7eeeb;
+  color: #3d4944;
+  font-size: 24rpx;
+  font-weight: 700;
+  text-align: center;
+  line-height: 48rpx;
+  flex-shrink: 0;
+}
+
+.badge-1 {
+  background: #f2c14e;
+  color: #3d3208;
+}
+
+.badge-2 {
+  background: #d5ddd8;
+  color: #24302b;
+}
+
+.badge-3 {
+  background: #e7c3a2;
+  color: #4a2e18;
+}
+
+.who {
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.team {
+  color: #66706c;
+  font-size: 22rpx;
+}
+
+.value {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #0f3d2e;
+  line-height: 1;
+}
+
+.value-miss {
+  color: #8c3a2f;
+}

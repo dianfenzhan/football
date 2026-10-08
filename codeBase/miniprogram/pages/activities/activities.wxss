@@ -1,0 +1,48 @@
+.fab {
+  position: fixed;
+  right: 32rpx;
+  bottom: 200rpx;
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 50%;
+  background: #0f3d2e;
+  color: #fff;
+  font-size: 48rpx;
+  font-weight: 300;
+  line-height: 92rpx;
+  text-align: center;
+  box-shadow: 0 6rpx 16rpx rgba(15, 61, 46, 0.35);
+  z-index: 90;
+}
+
+.swipe {
+  position: relative;
+  margin-bottom: 20rpx;
+  overflow: hidden;
+  border-radius: 16rpx;
+}
+
+.swipe-delete {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 160rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #8c3a2f;
+  color: #fff;
+  font-size: 28rpx;
+}
+
+.swipe-card {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 0;
+  transition: transform 0.15s ease;
+}
+
+.swipe-card.dragging {
+  transition: none;
+}

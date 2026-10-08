@@ -1,0 +1,40 @@
+<view class="page">
+  <view class="card">
+    <view class="muted" wx:if="{{canGrantAdmin}}">你是管理员，并且可以授权其他人成为管理员。被授权的人不能再授权。</view>
+    <view class="muted" wx:elif="{{isAdmin}}">你是管理员。</view>
+    <view class="reg-avatar-row">
+      <button class="avatar-chooser" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar">
+        <image wx:if="{{avatarPreview && !avatarBroken}}" class="avatar-img" src="{{avatarPreview}}" mode="aspectFill" binderror="onAvatarError"/>
+        <view wx:else class="avatar-fallback chooser-fallback" style="background: {{avatarBg}};">{{avatarChar}}</view>
+      </button>
+      <view class="muted">点头像，同步微信头像</view>
+    </view>
+    <view class="field">
+      <text class="label">昵称</text>
+      <input type="nickname" class="input" value="{{name}}" bindinput="onName" placeholder="怎么称呼你" />
+    </view>
+    <view class="reg-teams">
+      <view
+        wx:for="{{teams}}"
+        wx:key="_id"
+        class="reg-team {{teamId === item._id ? 'active' : ''}}"
+        data-id="{{item._id}}"
+        bindtap="onTeam"
+      >{{item.name}}</view>
+    </view>
+    <button class="btn" loading="{{saving}}" disabled="{{saving}}" bindtap="save">保存</button>
+  </view>
+  <view class="card" wx:if="{{canGrantAdmin}}">
+    <view class="title">授权管理员</view>
+    <view class="muted grant-hint">对方需要先在「我的」里保存姓名和球队，才会出现在这里。</view>
+    <view wx:if="{{members.length === 0}}" class="muted">还没有其他队员。</view>
+    <view wx:for="{{members}}" wx:key="_id" class="row member">
+      <view>
+        <view>{{item.name}}</view>
+        <view class="muted">{{item.teamName}}<text wx:if="{{item.canGrantAdmin}}"> · 授权人</text></view>
+      </view>
+      <switch checked="{{item.isAdmin}}" disabled="{{item.canGrantAdmin || grantingId === item._id}}" data-id="{{item._id}}" bindchange="onGrant" color="#0f3d2e" />
+    </view>
+  </view>
+  <nav current="me" />
+</view>

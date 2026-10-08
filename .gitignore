@@ -1,0 +1,50 @@
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+*.iml
+
+# Dependencies & build artifacts
+node_modules/
+**/node_modules/
+miniprogram_npm/
+**/miniprogram_npm/
+dist/
+build/
+coverage/
+*.log
+npm-debug.log*
+
+# WeChat DevTools local / personal config
+codeBase/project.private.config.json
+**/project.private.config.json
+
+# WeChat upload keys & local secrets (NEVER commit)
+**/*.key
+**/private.*.key
+doc/project/private.*.key
+doc/project/secrets.local.json
+**/.env
+**/.env.*
+!**/.env.example
+!**/secrets.local.example.json
+!**/secrets.local.json.example
+
+# Cloud / DevTools temp dirs (hash-named upload caches)
+codeBase/[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*
+
+# Local test / runtime outputs
+codeBase/scripts/*.local.*
+*.local.json
+!**/secrets.local.example.json
+!**/secrets.local.json.example
+
+# Keep Cursor / Trae project rules & skills (tracked)
+# Ignore only machine-local agent caches if they appear later
+.cursor/**/cache/
+.trae/**/cache/
+.cursor/**/*.local.*
+.trae/**/*.local.*

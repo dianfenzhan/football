@@ -1,0 +1,32 @@
+# 项目档案：周三快乐足球联队小程序 football
+
+> 本文件由 `.cursor/rules/project-profile.mdc` 同步而来（2026-09-30）。公共 skill 读取的项目参数。公共 skill 只认这里的键名，不要改键名。本项目不走 speckit，新功能直接实现。本项目不是 Java，`clean-code` 不同步。
+
+| 键 | 值 |
+|---|---|
+| 代码根 | `codeBase/`（微信小程序：`miniprogram/` 前端、`cloudfunctions/` 云函数、`database/`、`scripts/`） |
+| 栈 | 微信小程序原生 / 云开发云函数（Node.js）/ 云数据库；`miniprogram-ci`、`miniprogram-automator` |
+| Java 版本 | 无 |
+| Constitution | 无（不走 speckit；专属要求见下方「项目专属要求」） |
+| 原则映射 | 无（不走 speckit） |
+| 异常类型 | 无（云函数按现有 `api` 云函数的返回约定） |
+| 测试命令 | 无单元测试基建；现有验证 = `npm run smoke`（日常改动后）、`npm run regression`（上线体验版前全量；需开发者工具自动化端口 9421） |
+| 序列化断言方式 | 无 |
+| 本机验证 skill | `/smoke-test`（走微信开发者工具调云函数；不部署、不改密钥、不调 `setAdmin`）、`/regression-test`（全量身份矩阵；中途切换登录号身份，跑完自动恢复，中断跑 `npm run regression:restore`） |
+| 冒烟脚本目录 | `codeBase/scripts/`（`smoke-test.js`；检查项说明在 `doc/smoke-tests.md`；全量回归 `regression-test.js` + `regression-restore.js`，用例说明在 `doc/test-cases.md`） |
+| 开发分支 / 联调分支 | 无（单人项目，直接在主分支） |
+| 方法论文档 | `doc/features.md`、`doc/smoke-tests.md`、`doc/test-cases.md`；对齐用 `/doc-anchored` |
+
+## clean-code 附加 MUST 修（项目专属）
+
+- 不适用（非 Java）
+
+## 项目专属要求
+
+- 改功能后 MUST 跑 `/doc-anchored`，让 `doc/features.md`、`doc/smoke-tests.md`、`doc/test-cases.md` 与代码一致
+- 云函数新增接口 MUST 在 `codeBase/scripts/smoke-test.js` 加一条检查，并在 `codeBase/scripts/regression-test.js` 按身份矩阵补用例（用例 ID 同步进 `doc/test-cases.md`）
+- 密钥只在 `doc/project/secrets.local.json`、`private.*.key`（已 gitignore），MUST NOT 进代码或文档
+
+## 例
+
+- 加一个报名接口 → 直接实现；实现后加 smoke 检查项，再 `/doc-anchored`；`/smoke-test` 仅用户明确要求时跑。

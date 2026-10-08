@@ -1,0 +1,22 @@
+<view class="page">
+  <view class="card">
+    <view class="pills">
+      <view
+        wx:for="{{teams}}"
+        wx:key="_id"
+        class="pill {{teamId === item._id ? 'active' : ''}}"
+        data-id="{{item._id}}"
+        bindtap="onTeam"
+      >{{item.name}}</view>
+    </view>
+  </view>
+  <view class="card" wx:if="{{!loading && players.length === 0}}">
+    <view class="muted">该球队还没有队员</view>
+  </view>
+  <view class="card player-row" wx:for="{{players}}" wx:key="_id">
+    <image wx:if="{{item.avatarUrl}}" class="avatar" src="{{item.avatarUrl}}" mode="aspectFill"/>
+    <view wx:else class="avatar-fallback" style="background: {{item.avatarBg}};">{{item.avatarChar}}</view>
+    <text>{{item.name}}</text>
+  </view>
+  <nav current="players" />
+</view>

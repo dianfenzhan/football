@@ -1,0 +1,9 @@
+{
+  "desc": "球队内部工具，不收录",
+  "rules": [
+    {
+      "action": "disallow",
+      "page": "*"
+    }
+  ]
+}
