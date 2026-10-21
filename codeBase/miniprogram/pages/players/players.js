@@ -1,4 +1,4 @@
-const { call, avatarChar, avatarColor } = require('../../utils/api')
+const { call, avatarChar, avatarColor, sortTeamsByMine } = require('../../utils/api')
 
 const DEFAULT_TEAM_ID = 'team_jiong'
 
@@ -17,7 +17,7 @@ Page({
     ]).then(([meRes, listRes]) => {
       const user = meRes.user
       const myTeamId = (user && user.teamId) || DEFAULT_TEAM_ID
-      const teams = (meRes.teams || []).slice().sort((a, b) => (a._id === myTeamId ? -1 : b._id === myTeamId ? 1 : 0))
+      const teams = sortTeamsByMine(meRes.teams || [], myTeamId)
       this.setData({
         teams,
         teamId: myTeamId,

@@ -53,6 +53,34 @@ function assertFail(name, result) {
   return result
 }
 
+async function assertAvatarDraftSurvivesRefresh(miniProgram) {
+  const draft = 'wxfile://usr/avatar-draft-smoke.png'
+  await miniProgram.reLaunch('/pages/me/me')
+  const page = await miniProgram.currentPage()
+  await page.waitFor(900)
+  await page.setData({
+    tempAvatar: draft,
+    avatarPreview: draft,
+    avatarBroken: false,
+    name: '__draft__'
+  })
+  await page.callMethod('onShow')
+  const deadline = Date.now() + 8000
+  let data = {}
+  while (Date.now() < deadline) {
+    await page.waitFor(300)
+    data = await page.data()
+    if (data.name && data.name !== '__draft__') break
+  }
+  if (!data.name || data.name === '__draft__') {
+    throw new Error('avatar draft survives refresh: onShow did not finish')
+  }
+  if (data.tempAvatar !== draft || data.avatarPreview !== draft) {
+    throw new Error('avatar draft survives refresh: unsaved avatar cleared')
+  }
+  pass('avatar draft survives refresh')
+}
+
 async function statRow(miniProgram, openid, type, teamId) {
   const stats = assertOk('stats:' + type + (teamId ? ':' + teamId : ''), await callApi(
     miniProgram,
@@ -103,6 +131,7 @@ async function main() {
     const meAvatar = assertOk('me avatar', await callApi(miniProgram, 'me'))
     if (meAvatar.user.avatarUrl !== smokeAvatar) throw new Error('me avatar: avatarUrl mismatch')
     pass('avatar persisted')
+    await assertAvatarDraftSurvivesRefresh(miniProgram)
 
     const members = await callApi(miniProgram, 'listMembers')
     if (user.canGrantAdmin) assertOk('listMembers', members)
@@ -146,6 +175,9 @@ async function main() {
     }
     if (homeSigned.nextActivity.signedUp !== true) {
       throw new Error('homeSummary: nextActivity.signedUp not true after signup')
+    }
+    if (homeSigned.nextActivity.signedTeamId !== user.teamId) {
+      throw new Error('homeSummary: signedTeamId mismatch after signup')
     }
     pass('homeSummary signedUp true')
 
@@ -255,6 +287,16 @@ async function main() {
     }
     pass('homeSummary shape')
 
+    const homeTeam = assertOk('homeSummary team filter', await callApi(miniProgram, 'homeSummary', {
+      span: '3m',
+      teamId: user.teamId
+    }))
+    if (homeTeam.teamId !== user.teamId) throw new Error('homeSummary: teamId not echoed')
+    if (!(homeTeam.goalsTop || []).every((row) => !row.teamId || row.teamId === user.teamId)) {
+      throw new Error('homeSummary: goalsTop not filtered by team')
+    }
+    pass('homeSummary team filter')
+
     assertOk('cancelSignup', await callApi(miniProgram, 'cancelSignup', { activityId }))
     cancelled = true
     assertFail('cancelSignup again', await callApi(miniProgram, 'cancelSignup', { activityId }))
@@ -265,6 +307,49 @@ async function main() {
       throw new Error('homeSummary: nextActivity.signedUp not false after cancel')
     }
     pass('homeSummary signedUp false')
+
+    const otherTeamId = user.teamId === 'team_jiong' ? 'team_pudong' : 'team_jiong'
+    assertFail('signup invalid team', await callApi(miniProgram, 'signup', {
+      activityId,
+      teamId: 'team_ghost'
+    }))
+    assertOk('signup other team', await callApi(miniProgram, 'signup', {
+      activityId,
+      teamId: otherTeamId
+    }))
+    cancelled = false
+    const meAfterOther = assertOk('me after other-team signup', await callApi(miniProgram, 'me'))
+    if (meAfterOther.user.teamId !== user.teamId) {
+      throw new Error('signup other team: users.teamId changed')
+    }
+    const otherDetail = assertOk('activityDetail other-team signup', await callApi(miniProgram, 'activityDetail', {
+      activityId
+    }))
+    const otherSignup = (otherDetail.signups || []).find((item) => item._openid === openid)
+    if (!otherSignup || otherSignup.teamId !== otherTeamId) {
+      throw new Error('signup other team: signup.teamId mismatch')
+    }
+    const homeOther = assertOk('homeSummary signedTeamId other', await callApi(miniProgram, 'homeSummary'))
+    if (!(homeOther.nextActivity && homeOther.nextActivity.signedTeamId === otherTeamId)) {
+      throw new Error('homeSummary: signedTeamId not other team after cross signup')
+    }
+    pass('other-team signup kept profile team')
+
+    assertOk('saveProfile keep signup team', await callApi(miniProgram, 'saveProfile', {
+      name: user.name,
+      teamId: user.teamId
+    }))
+    const afterProfile = assertOk('activityDetail after saveProfile', await callApi(miniProgram, 'activityDetail', {
+      activityId
+    }))
+    const keptSignup = (afterProfile.signups || []).find((item) => item._openid === openid)
+    if (!keptSignup || keptSignup.teamId !== otherTeamId) {
+      throw new Error('saveProfile: overwrote signup.teamId')
+    }
+    pass('saveProfile keeps signup team')
+
+    assertOk('cancelSignup after other team', await callApi(miniProgram, 'cancelSignup', { activityId }))
+    cancelled = true
 
     let found = false
     let page = 1

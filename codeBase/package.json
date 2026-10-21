@@ -5,6 +5,7 @@
   "description": "周三快乐足球联队小程序",
   "scripts": {
     "deploy:cloud": "node scripts/deploy-cloud.js",
+    "test": "node --test test/rules.test.js",
     "smoke": "node scripts/smoke-test.js",
     "regression": "node scripts/regression-test.js",
     "regression:restore": "node scripts/regression-restore.js"

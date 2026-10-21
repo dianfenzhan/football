@@ -8,11 +8,11 @@
     </block>
     <block wx:else>
       <view wx:if="{{!signed}}" class="top-actions">
-        <button class="btn hero" bindtap="signup">⚽️ 立即报名 · {{myTeamName}}</button>
+        <button class="btn hero" bindtap="signup">{{signupButtonText}}</button>
       </view>
       <block wx:else>
         <view class="signed-banner">
-          <text class="signed-text">✓ 已报名 · {{myTeamName}}</text>
+          <text class="signed-text">✓ 已报名 · {{signedTeamName}}</text>
           <view class="signed-cancel" hover-class="signed-cancel-hover" hover-stay-time="80" bindtap="cancel">取消报名</view>
         </view>
       </block>
@@ -54,11 +54,21 @@
 
   <view wx:if="{{me && me.isAdmin && closed}}" class="card">
     <view class="title">记录数据</view>
-    <view wx:if="{{members.length === 0}}" class="muted">还没有队员。对方需要先在「我的」里保存资料。</view>
+    <view wx:if="{{signedMembers.length === 0}}" class="muted">这场还没有人报名。</view>
     <block wx:else>
-      <view class="field">
+      <view class="reg-teams member-filter">
+        <view
+          wx:for="{{memberFilters}}"
+          wx:key="id"
+          class="reg-team {{memberTeam === item.id ? 'active' : ''}}"
+          data-id="{{item.id}}"
+          bindtap="onMemberTeam"
+        >{{item.name}}</view>
+      </view>
+      <view wx:if="{{pickMembers.length === 0}}" class="muted">这个队这场还没有人报名。</view>
+      <view wx:else class="field">
         <text class="label">队员</text>
-        <picker mode="selector" range="{{members}}" range-key="label" value="{{pickIndex}}" bindchange="onPickPlayer">
+        <picker mode="selector" range="{{pickMembers}}" range-key="label" value="{{pickIndex}}" bindchange="onPickPlayer">
           <view class="picker-value">{{pickedLabel}}</view>
         </picker>
       </view>

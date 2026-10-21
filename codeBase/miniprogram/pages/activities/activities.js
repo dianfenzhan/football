@@ -1,9 +1,10 @@
-const { call, formatTime, teamName } = require('../../utils/api')
+const { call, formatTime, teamName, sortQuotasByMine } = require('../../utils/api')
 
 Page({
   data: {
     activities: [],
     isAdmin: false,
+    myTeamId: 'team_jiong',
     loading: true,
     loadingMore: false,
     page: 1,
@@ -21,10 +22,13 @@ Page({
     Promise.all([pendingMe, call('listActivities', { page })]).then(([profile, list]) => {
       if (request !== this._loadSeq) return
       const teams = list.teams || []
+      const myTeamId = reset && profile && profile.user && profile.user.teamId
+        ? profile.user.teamId
+        : this.data.myTeamId
       const mapped = (list.activities || []).map((activity) => ({
         ...activity,
         timeText: formatTime(activity.startTime),
-        quotaText: (activity.quotas || []).map((quota) => {
+        quotaText: sortQuotasByMine(activity.quotas || [], myTeamId).map((quota) => {
           return `${teamName(teams, quota.teamId)} ${quota.signed}/${quota.maxSignups}`
         }).join('  ')
       }))
@@ -32,7 +36,10 @@ Page({
       const hasMore = !!list.hasMore && mapped.length > 0
       this.setData({
         activities,
-        ...(reset && profile ? { isAdmin: !!(profile.user && profile.user.isAdmin) } : {}),
+        ...(reset && profile ? {
+          isAdmin: !!(profile.user && profile.user.isAdmin),
+          myTeamId
+        } : {}),
         page,
         hasMore,
         loading: false,

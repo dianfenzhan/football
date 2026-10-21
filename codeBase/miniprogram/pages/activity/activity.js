@@ -1,4 +1,13 @@
-const { call, formatTime, teamName, uploadAvatar, avatarChar, avatarColor } = require('../../utils/api')
+const {
+  call,
+  formatTime,
+  teamName,
+  sortTeamsByMine,
+  sortQuotasByMine,
+  uploadAvatar,
+  avatarChar,
+  avatarColor
+} = require('../../utils/api')
 
 Page({
   data: {
@@ -11,6 +20,9 @@ Page({
     roster: [],
     records: [],
     members: [],
+    signedMembers: [],
+    pickMembers: [],
+    memberTeam: 'all',
     counts: Array.from({ length: 30 }, (_, index) => `${index + 1}`),
     statOptions: Array.from({ length: 21 }, (_, index) => `${index}`),
     pigeonOptions: ['正常', '鸽子'],
@@ -64,7 +76,7 @@ Page({
     call('activityDetail', { activityId: this.data.id }).then((res) => {
       const me = res.me
       const myTeamId = (me && me.teamId) || 'team_jiong'
-      const teams = (res.teams || []).slice().sort((a, b) => (a._id === myTeamId ? -1 : b._id === myTeamId ? 1 : 0))
+      const teams = sortTeamsByMine(res.teams || [], myTeamId)
       const contributionMap = {}
       ;(res.contributions || []).forEach((item) => {
         contributionMap[item.playerOpenid] = item
@@ -84,12 +96,12 @@ Page({
           avatarBg: avatarColor(signup.userName)
         }
       })
-      const quotas = (res.quotas || []).map((quota) => ({
+      const quotas = sortQuotasByMine((res.quotas || []).map((quota) => ({
         ...quota,
         teamName: teamName(teams, quota.teamId),
         full: quota.signed >= quota.maxSignups,
-        countIndex: Math.max(0, Math.min(29, (quota.maxSignups || 12) - 1))
-      })).sort((a, b) => (a.teamId === myTeamId ? -1 : b.teamId === myTeamId ? 1 : 0))
+        countIndex: Math.max(0, Math.min(29, (quota.maxSignups || 11) - 1))
+      })), myTeamId)
       const roster = teams.map((team) => {
         const quota = quotas.find((item) => item.teamId === team._id)
         return {
@@ -104,10 +116,16 @@ Page({
             .sort((a, b) => (b.isAdmin ? 1 : 0) - (a.isAdmin ? 1 : 0))
         }
       })
-      const members = (res.members || []).map((user) => ({
-        ...user,
-        label: `${user.name} · ${teamName(teams, user.teamId)}`
+      const signedMembers = players.map((player) => ({
+        _openid: player._openid,
+        name: player.userName,
+        teamId: player.teamId,
+        label: `${player.userName} · ${player.teamName}`
       }))
+      const memberTeam = this.data.memberTeam || 'all'
+      const pickMembers = memberTeam === 'all'
+        ? signedMembers
+        : signedMembers.filter((item) => item.teamId === memberTeam)
       const records = (res.contributions || []).map((item) => {
         const goals = item.goals || 0
         const assists = item.assists || 0
@@ -124,8 +142,22 @@ Page({
           avatarBg: avatarColor(item.userName)
         }
       })
-      const signed = !!(me && (res.signups || []).some((item) => item._openid === me._openid))
-      const picked = members.find((item) => item._openid === this.data.selectedOpenid)
+      const mySignup = me
+        ? (res.signups || []).find((item) => item._openid === me._openid)
+        : null
+      const signed = !!mySignup
+      const otherTeam = teams.find((team) => team._id !== myTeamId) || null
+      const myQuota = quotas.find((item) => item.teamId === myTeamId)
+      const otherQuota = otherTeam
+        ? quotas.find((item) => item.teamId === otherTeam._id)
+        : null
+      const myTeamFull = !!(myQuota && myQuota.full)
+      const otherTeamFull = !!(otherQuota && otherQuota.full)
+      const canOfferOther = myTeamFull && otherTeam && !otherTeamFull
+      const signupButtonText = canOfferOther
+        ? `本队已满，改报 · ${otherTeam.name}`
+        : `⚽️ 立即报名 · ${teamName(teams, myTeamId)}`
+      const picked = pickMembers.find((item) => item._openid === this.data.selectedOpenid)
       const stat = picked ? (contributionMap[picked._openid] || {}) : {}
       const keepForm = !!(picked && this.data.selectedOpenid === picked._openid)
       this.setData({
@@ -136,17 +168,30 @@ Page({
         rounds: res.rounds || [],
         roster,
         records,
-        members,
+        members: pickMembers,
+        signedMembers,
+        pickMembers,
+        memberFilters: [{ id: 'all', name: '全部' }].concat(teams.map((team) => ({
+          id: team._id,
+          name: team.name
+        }))),
         me,
         signed,
         closed: res.activity.startTime <= Date.now(),
         showSharePrompt: !!this.pendingShare && !!(me && me.isAdmin),
-        pickIndex: keepForm ? this.data.pickIndex : (picked ? members.indexOf(picked) : 0),
+        pickIndex: keepForm ? this.data.pickIndex : (picked ? pickMembers.indexOf(picked) : 0),
         pickedLabel: keepForm ? this.data.pickedLabel : (picked ? picked.label : '选择队员'),
         goalIndex: keepForm ? this.data.goalIndex : (picked ? (stat.goals || 0) : 0),
         assistIndex: keepForm ? this.data.assistIndex : (picked ? (stat.assists || 0) : 0),
         pigeonIndex: keepForm ? this.data.pigeonIndex : (picked && stat.absent ? 1 : 0),
         myTeamName: me ? teamName(teams, me.teamId) : '',
+        signedTeamName: mySignup
+          ? teamName(teams, mySignup.teamId)
+          : (me ? teamName(teams, me.teamId) : ''),
+        otherTeamId: otherTeam ? otherTeam._id : '',
+        otherTeamName: otherTeam ? otherTeam.name : '',
+        canOfferOther,
+        signupButtonText,
         loadFailed: false
       })
     }).catch((error) => {
@@ -161,7 +206,42 @@ Page({
   },
   noop() {},
   signup() {
-    call('signup', { activityId: this.data.id }).then(() => this.load())
+    const activityId = this.data.id
+    const otherTeamId = this.data.otherTeamId
+    const otherTeamName = this.data.otherTeamName
+    const myQuota = (this.data.quotas || []).find((item) => item.teamId === (this.data.me && this.data.me.teamId))
+    const otherQuota = (this.data.quotas || []).find((item) => item.teamId === otherTeamId)
+    const myFull = !!(myQuota && myQuota.signed >= myQuota.maxSignups)
+    const otherFull = !!(otherQuota && otherQuota.signed >= otherQuota.maxSignups)
+
+    if (myFull && otherFull) {
+      wx.showToast({ title: '两队都已满员', icon: 'none' })
+      return
+    }
+    if (myFull && otherTeamId && !otherFull) {
+      this.offerOtherTeam(otherTeamId, otherTeamName)
+      return
+    }
+    call('signup', { activityId }).then(() => this.load()).catch((error) => {
+      if (!error || error.message !== '这个队已经满员') return
+      if (!otherTeamId || otherFull) {
+        wx.showToast({ title: '两队都已满员', icon: 'none' })
+        return
+      }
+      this.offerOtherTeam(otherTeamId, otherTeamName)
+    })
+  },
+  offerOtherTeam(otherTeamId, otherTeamName) {
+    wx.showModal({
+      title: '本队已满',
+      content: `是否改报「${otherTeamName}」？不会修改你的主队资料。`,
+      confirmText: '改报',
+      cancelText: '取消',
+      success: (res) => {
+        if (!res.confirm) return
+        call('signup', { activityId: this.data.id, teamId: otherTeamId }).then(() => this.load())
+      }
+    })
   },
   cancel() {
     wx.showModal({
@@ -352,9 +432,23 @@ Page({
       pigeonIndex: stat.absent ? 1 : 0
     })
   },
+  onMemberTeam(event) {
+    const memberTeam = event.currentTarget.dataset.id
+    const pickMembers = memberTeam === 'all'
+      ? this.data.signedMembers
+      : this.data.signedMembers.filter((item) => item.teamId === memberTeam)
+    const still = pickMembers.find((item) => item._openid === this.data.selectedOpenid)
+    this.setData({
+      memberTeam,
+      pickMembers,
+      members: pickMembers,
+      pickIndex: still ? pickMembers.indexOf(still) : 0,
+      ...(still ? {} : { selectedOpenid: '', pickedLabel: '选择队员' })
+    })
+  },
   onPickPlayer(event) {
     const pickIndex = Number(event.detail.value)
-    const picked = this.data.members[pickIndex]
+    const picked = this.data.pickMembers[pickIndex]
     if (!picked) return
     this.setData({ pickIndex })
     this.fillStat(picked)
@@ -399,7 +493,7 @@ Page({
   },
   saveStat() {
     if (!this.data.me || !this.data.me.isAdmin) return
-    const player = this.data.members.find((item) => item._openid === this.data.selectedOpenid)
+    const player = this.data.pickMembers.find((item) => item._openid === this.data.selectedOpenid)
     if (!player) {
       wx.showToast({ title: '请选择队员', icon: 'none' })
       return

@@ -111,6 +111,10 @@
   gap: 16rpx;
 }
 
+.member-filter {
+  margin-bottom: 20rpx;
+}
+
 .reg-team {
   flex: 1;
   text-align: center;

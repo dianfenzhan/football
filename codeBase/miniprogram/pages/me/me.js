@@ -1,4 +1,4 @@
-const { call, teamName, uploadAvatar, avatarChar, avatarColor } = require('../../utils/api')
+const { call, teamName, sortTeamsByMine, uploadAvatar, avatarChar, avatarColor } = require('../../utils/api')
 
 Page({
   data: {
@@ -19,22 +19,25 @@ Page({
   onShow() {
     call('me').then((res) => {
       const user = res.user
-      const teams = res.teams || []
+      const myTeamId = (user && user.teamId) || 'team_jiong'
+      const teams = sortTeamsByMine(res.teams || [], myTeamId)
       const canGrantAdmin = !!(user && user.canGrantAdmin)
       const name = user ? user.name : ''
-      this.setData({
+      const profile = {
         teams,
         name,
         teamId: user ? user.teamId : '',
-        avatarUrl: (user && user.avatarUrl) || '',
-        tempAvatar: '',
-        avatarPreview: (user && user.avatarUrl) || '',
-        avatarBroken: false,
         avatarChar: avatarChar(name),
         avatarBg: avatarColor(name),
         isAdmin: !!(user && user.isAdmin),
         canGrantAdmin
-      })
+      }
+      if (!this.data.tempAvatar) {
+        profile.avatarUrl = (user && user.avatarUrl) || ''
+        profile.avatarPreview = profile.avatarUrl
+        profile.avatarBroken = false
+      }
+      this.setData(profile)
       if (canGrantAdmin) this.loadMembers(teams)
     })
   },
@@ -66,7 +69,22 @@ Page({
   },
   onName(event) { this.setData({ name: event.detail.value }) },
   onChooseAvatar(event) {
-    this.setData({ tempAvatar: event.detail.avatarUrl, avatarPreview: event.detail.avatarUrl, avatarBroken: false })
+    const src = event.detail.avatarUrl
+    if (!src) return
+    const show = (path) => this.setData({ tempAvatar: path, avatarPreview: path, avatarBroken: false })
+    if (/^https:\/\//.test(src)) {
+      show(src)
+      return
+    }
+    const fs = wx.getFileSystemManager()
+    const dest = `${wx.env.USER_DATA_PATH}/avatar-draft.png`
+    const copy = () => fs.copyFile({
+      srcPath: src,
+      destPath: dest,
+      success: () => show(dest),
+      fail: () => show(src)
+    })
+    fs.unlink({ filePath: dest, complete: copy })
   },
   onAvatarError() {
     this.setData({ avatarBroken: true })

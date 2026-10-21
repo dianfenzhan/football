@@ -19,6 +19,9 @@ AppID：`wxb8021a7ae0c71bd0`（周三快乐足球联队）
   --env cloudbase-d5g20kltv44b494f6 --names api --remote-npm-install \
   --project "$(pwd)" --lang zh
 
+# 纯规则单元测试（不连云）
+npm test
+
 # 冒烟测试（先开自动化端口）
 /Applications/wechatwebdevtools.app/Contents/MacOS/cli auto --project "$(pwd)" --auto-port 9421
 node scripts/smoke-test.js
@@ -33,5 +36,5 @@ node scripts/smoke-test.js
 - 队员先填姓名和球队，再报名；满员后不能报，可取消。
 - 管理员改名额、记每轮比分、记进球助攻，也可以把已报名的人记为缺勤。报名名单所有人都能看到姓名。
 - 打开小程序先进入首页：今天起最近的一场，以及进球、助攻、缺勤各前 10。榜单默认近 3 个月，可改成近半年、1 年、2 年、3 年。活动列表在底部「活动」。
-- 活动开始后不能报名或取消，也不能改人数。创建和改人数都是滚动选择，每队 1 到 30 人，默认 12。
+- 活动开始后不能报名或取消，也不能改人数。创建和改人数都是滚动选择，每队 1 到 30 人，默认 11。
 - 管理员不用报名也能建活动、记数据。在活动页选择队员，再滚动选择进球、助攻，以及这次是否鸽子，默认不鸽子。

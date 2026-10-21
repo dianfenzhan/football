@@ -26,7 +26,7 @@
           <view class="bar"><view class="bar-fill" style="width: {{item.percent}}%;"></view></view>
         </view>
       </view>
-      <view wx:if="{{next.signedUp}}" class="signed-banner">✓ 已报名 · {{myTeamName}}</view>
+      <view wx:if="{{next.signedUp}}" class="signed-banner">✓ 已报名 · {{signedTeamName}}</view>
       <button wx:else class="btn hero" data-id="{{next._id}}" bindtap="open">⚽️ 去报名</button>
     </block>
     <view wx:else class="hero hero-empty">

@@ -1,4 +1,4 @@
-const { call, teamName } = require('../../utils/api')
+const { call, teamName, sortQuotasByMine } = require('../../utils/api')
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六']
 
@@ -19,7 +19,7 @@ Page({
     next: null,
     loading: true,
     isAdmin: false,
-    myTeamName: ''
+    signedTeamName: ''
   },
   onShow() {
     this.load()
@@ -35,12 +35,10 @@ Page({
     this.setData({ loading: true })
     Promise.all([call('homeSummary', { span: '3m' }), call('me')]).then(([summary, profile]) => {
       const teams = summary.teams || []
-      this.setData({
-        isAdmin: !!(profile.user && profile.user.isAdmin),
-        myTeamName: profile.user ? teamName(teams, profile.user.teamId) : ''
-      })
+      const myTeamId = (profile.user && profile.user.teamId) || 'team_jiong'
       const activity = summary.nextActivity
       let next = null
+      let signedTeamName = ''
       if (activity) {
         const date = new Date(activity.startTime)
         next = {
@@ -48,14 +46,22 @@ Page({
           dateText: `${date.getMonth() + 1}月${date.getDate()}日 周${WEEK[date.getDay()]}`,
           clock: `${pad(date.getHours())}:${pad(date.getMinutes())}`,
           countdown: countdownText(activity.startTime),
-          quotas: (activity.quotas || []).map((quota) => ({
+          quotas: sortQuotasByMine((activity.quotas || []).map((quota) => ({
             ...quota,
             teamName: teamName(teams, quota.teamId),
             percent: quota.maxSignups ? Math.min(100, Math.round((quota.signed / quota.maxSignups) * 100)) : 0
-          }))
+          })), myTeamId)
+        }
+        if (activity.signedUp) {
+          signedTeamName = teamName(teams, activity.signedTeamId || myTeamId)
         }
       }
-      this.setData({ next, loading: false })
+      this.setData({
+        next,
+        signedTeamName,
+        isAdmin: !!(profile.user && profile.user.isAdmin),
+        loading: false
+      })
     }).catch(() => this.setData({ loading: false }))
   },
   open(event) {

@@ -212,14 +212,35 @@ async function main() {
     await no('R-SIGN-008', callApi(miniProgram, 'signup', { activityId: pastId }))
     await no('R-SIGN-009', callApi(miniProgram, 'cancelSignup', { activityId: pastId }))
 
-    // 满员拒绝：假人占掉我队的唯一名额
+    // 满员拒绝：假人占掉我队的唯一名额；满员后可改报另一队且不改主队
+    const otherTeam = myTeam === 'team_jiong' ? 'team_pudong' : 'team_jiong'
     await ok('R-SIGN-004:setup', setup(miniProgram, 'createFake', { teamId: myTeam }))
     await ok('R-SIGN-004:setup', setup(miniProgram, 'fakeSignup', { activityId }))
     await no('R-SIGN-004', callApi(miniProgram, 'signup', { activityId }))
+    await no('R-SIGN-011', callApi(miniProgram, 'signup', { activityId, teamId: 'team_ghost' }))
+    await ok('R-SIGN-010', callApi(miniProgram, 'signup', { activityId, teamId: otherTeam }))
+    const meAfterCross = await ok('R-SIGN-010:me', callApi(miniProgram, 'me'))
+    await is('R-SIGN-010', meAfterCross.user.teamId === myTeam, '改报后主队资料不变')
+    const crossDetail = await ok('R-SIGN-010:detail', callApi(miniProgram, 'activityDetail', { activityId }))
+    const crossSignup = (crossDetail.signups || []).find((item) => item._openid === openid)
+    await is('R-SIGN-010', !!(crossSignup && crossSignup.teamId === otherTeam), '报名行应记在另一队')
+    await ok('R-SIGN-012', callApi(miniProgram, 'saveProfile', { name: meAfterCross.user.name, teamId: myTeam }))
+    const afterSave = await ok('R-SIGN-012:detail', callApi(miniProgram, 'activityDetail', { activityId }))
+    const kept = (afterSave.signups || []).find((item) => item._openid === openid)
+    await is('R-SIGN-012', !!(kept && kept.teamId === otherTeam), 'saveProfile 不得覆盖本场报名球队')
+    await ok('R-SIGN-010:cancel', callApi(miniProgram, 'cancelSignup', { activityId }))
     await ok('R-SIGN-004:cleanup', setup(miniProgram, 'removeFake'))
 
     await ok('R-SIGN-001', callApi(miniProgram, 'signup', { activityId }))
     await no('R-SIGN-002', callApi(miniProgram, 'signup', { activityId }))
+    const homeSigned = await ok('R-STAT-008', callApi(miniProgram, 'homeSummary'))
+    await is(
+      'R-STAT-008',
+      !!(homeSigned.nextActivity
+        && homeSigned.nextActivity._id === activityId
+        && homeSigned.nextActivity.signedTeamId === myTeam),
+      'signedTeamId 应为本场报名队'
+    )
 
     const detail = await ok('R-ACT-017', callApi(miniProgram, 'activityDetail', { activityId }))
     await is('R-ACT-017', Array.isArray(detail.members) && detail.members.length > 0, '管理员应拿到 members')
@@ -304,6 +325,13 @@ async function main() {
     await is('R-STAT-004', home6m.span === '6m', 'span 应回显 6m')
     const homeBad = await callApi(miniProgram, 'homeSummary', { span: 'xx' })
     await is('R-STAT-004', homeBad.span === '3m', '非法 span 应回落 3m')
+    const homeTeam = await ok('R-STAT-007', callApi(miniProgram, 'homeSummary', { span: '3m', teamId: myTeam }))
+    await is('R-STAT-007', homeTeam.teamId === myTeam, 'homeSummary 应回显 teamId')
+    await is(
+      'R-STAT-007',
+      (homeTeam.goalsTop || []).every((row) => !row.teamId || row.teamId === myTeam),
+      'homeSummary 榜单应按队过滤'
+    )
 
     // ---------- 阶段 E：未注册 ----------
     console.log('--- 阶段 E：未注册 ---')

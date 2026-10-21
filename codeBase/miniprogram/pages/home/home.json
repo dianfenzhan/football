@@ -2,6 +2,6 @@
   "usingComponents": {
     "nav": "/components/nav/nav"
   },
-  "navigationBarTitleText": "周三足球",
+  "navigationBarTitleText": "首页",
   "enableShareAppMessage": true
 }

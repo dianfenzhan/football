@@ -1,4 +1,4 @@
-const { call } = require('../../utils/api')
+const { call, sortTeamsByMine } = require('../../utils/api')
 
 function pad(n) {
   return n < 10 ? `0${n}` : `${n}`
@@ -23,8 +23,8 @@ Page({
     time: '',
     counts: Array.from({ length: 30 }, (_, index) => `${index + 1}`),
     quotas: {
-      team_jiong: '12',
-      team_pudong: '12'
+      team_jiong: '11',
+      team_pudong: '11'
     },
     saving: false
   },
@@ -39,7 +39,8 @@ Page({
         wx.showToast({ title: '只有管理员可以新建', icon: 'none' })
         return
       }
-      this.setData({ teams: res.teams || [] })
+      const myTeamId = (res.user && res.user.teamId) || 'team_jiong'
+      this.setData({ teams: sortTeamsByMine(res.teams || [], myTeamId) })
     })
   },
   onTitle(event) { this.setData({ title: event.detail.value }) },

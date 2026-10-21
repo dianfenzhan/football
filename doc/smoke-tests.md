@@ -18,6 +18,7 @@
 | `saveProfile avatar` | `saveProfile` | 姓名、球队不变，头像传测试 fileID `cloud://smoke-avatar-check` | 返回的 `user.avatarUrl` 与该值一致 |
 | `me avatar` | `me` | 再读当前用户 | `user.avatarUrl` 与刚存的一致 |
 | `avatar persisted` | — | 头像落库确认 | 上述两值相同 |
+| `avatar draft survives refresh` | 页面 `onShow` | 「我的」页先写入未保存头像 `wxfile://usr/avatar-draft-smoke.png`，再进一次 `onShow` | `me` 返回后 `tempAvatar` 与 `avatarPreview` 仍是该值，不被已保存头像盖掉 |
 | `listMembers` 或 `listMembers denied` | `listMembers` | 当前身份拉成员 | 授权人成功；其他人失败 |
 | `listPlayers` / `listPlayers sorted desc` | `listPlayers` | 当前身份拉全部队员 | `ok`，数组按注册时间倒序，含当前用户，且用户行带 `avatarUrl` 字段 |
 | `stats:month` / `stats:quarter` / `stats:year` / `stats:month:<teamId>` | `stats` | 记进球前先读月、季、年，以及自己球队的月统计 | `ok`，作为增量基线 |
@@ -42,10 +43,15 @@
 | `updateQuota expand` | `updateQuota` | 名额改为 14 | `ok` |
 | `homeSummary` | `homeSummary` | 不传 `span`，服务端默认 `3m` | `ok` |
 | `homeSummary shape` | — | 返回结构 | 有 `nextActivity`，三个榜是数组 |
-| `homeSummary signedUp true` | — | 报名后 `nextActivity.signedUp` | `true`（且 `nextActivity` 是冒烟那场） |
+| `homeSummary team filter` | `homeSummary` | 传当前用户 `teamId` | 回显 `teamId`；`goalsTop` 行（有 `teamId` 时）均属于该队 |
+| `homeSummary signedUp true` | — | 报名后 `nextActivity.signedUp` / `signedTeamId` | `signedUp` 为 `true`，`signedTeamId` 等于当前用户主队（且 `nextActivity` 是冒烟那场） |
 | `cancelSignup` | `cancelSignup` | 取消这场报名 | `ok` |
 | `cancelSignup again` | `cancelSignup` | 再取消一次 | 失败 |
 | `homeSummary signedUp false` | — | 取消后 `nextActivity.signedUp` | `false`（取消是软取消，按 `status: 'signed'` 判断） |
+| `signup invalid team` | `signup` | `teamId` 传非法值 | 失败 |
+| `signup other team` / `other-team signup kept profile team` | `signup` | 取消后带另一队 `teamId` 再报 | `ok`；`me.user.teamId` 仍为主队；报名行 `teamId` 为另一队 |
+| `saveProfile keep signup team` | `saveProfile` | 姓名、主队不变再保存 | `ok`；该场报名行 `teamId` 仍为改报的队 |
+| `cancelSignup after other team` | `cancelSignup` | 取消改报 | `ok` |
 | `listActivities` | `listActivities` | 从第 1 页起逐页查，每页最多 10 条 | `ok`，且单页不超过 10 条 |
 | `activity listed` | — | 列表内容 | 某一页含刚建的 `activityId` |
 | `deleteActivity` | `deleteActivity` | 删掉刚建的这场 | `ok` |
@@ -62,4 +68,4 @@
 - 第二个微信号报名，以及一队报满后再报被拒绝（回归 R-SIGN-004；真人二号见手工 M-02）。
 - 授权或取消管理员（回归 R-AUTH 全组）。
 - 数据页切换 `6m`、`1y`、`2y`、`3y`。脚本只打到默认 `3m`（回归 R-STAT-004 覆盖 span 回显与回落，UI 切换见手工 M-03）。
-- 页面点击、分享卡片、注册弹层、头像上传（身份显隐见回归 R-UI 组，其余见手工 M-02/M-04/M-05）。
+- 页面点击、分享卡片、注册弹层、头像选择器和云存储实际上传（身份显隐见回归 R-UI 组，其余见手工 M-02/M-04/M-05）。未保存头像不被「我的」页刷新清掉已由 `avatar draft survives refresh` 覆盖。

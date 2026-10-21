@@ -29,6 +29,18 @@ function teamName(teams, teamId) {
   return team ? team.name : ''
 }
 
+function sortTeamsByMine(teams, myTeamId) {
+  return (teams || []).slice().sort((a, b) => (
+    a._id === myTeamId ? -1 : b._id === myTeamId ? 1 : 0
+  ))
+}
+
+function sortQuotasByMine(quotas, myTeamId) {
+  return (quotas || []).slice().sort((a, b) => (
+    a.teamId === myTeamId ? -1 : b.teamId === myTeamId ? 1 : 0
+  ))
+}
+
 const AVATAR_COLORS = ['#0f3d2e', '#1d6b50', '#8c3a2f', '#b8763c', '#3d5a80', '#6b4d8c', '#a0522d', '#4a7c59']
 
 function avatarChar(name) {
@@ -46,4 +58,13 @@ function uploadAvatar(filePath, openid) {
   return wx.cloud.uploadFile({ cloudPath, filePath }).then((res) => res.fileID)
 }
 
-module.exports = { call, formatTime, teamName, uploadAvatar, avatarChar, avatarColor }
+module.exports = {
+  call,
+  formatTime,
+  teamName,
+  sortTeamsByMine,
+  sortQuotasByMine,
+  uploadAvatar,
+  avatarChar,
+  avatarColor
+}

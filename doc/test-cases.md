@@ -77,6 +77,9 @@
 | R-SIGN-002 | A | 重复 `signup` | 拒绝「你已经报名了」 | ✓ |
 | R-SIGN-003 | U | `signup` | 拒绝（需先注册） | |
 | R-SIGN-004 | A | 假人占满本队名额后 `signup` | 拒绝「这个队已经满员」 | |
+| R-SIGN-010 | A | 本队满员后带另一队 `teamId` 报名 | 成功；`me.user.teamId` 仍为主队；报名行 `teamId` 为另一队 | ✓ |
+| R-SIGN-011 | A | `signup` 传非法 `teamId` | 拒绝「请选择球队」 | ✓ |
+| R-SIGN-012 | A | 改报后 `saveProfile`（姓名球队不变） | 该场报名行的 `teamId` 仍为改报的队 | ✓ |
 | R-SIGN-005 | R | `cancelSignup` | 成功 | ✓ |
 | R-SIGN-006 | R | 再次 `cancelSignup` | 拒绝「你还没有报名」 | ✓ |
 | R-SIGN-007 | U | `cancelSignup` | 拒绝 | |
@@ -118,6 +121,8 @@
 | R-STAT-002 | 任何 | 记 2 球后 `stats` 按球队过滤 | 本队 +2，他队不变 | ✓ |
 | R-STAT-003 | 任何 | `stats` 季度 5 / 月份 13 / 缺年份 | 均拒绝 | |
 | R-STAT-004 | 任何 | `homeSummary` span=`6m` / 非法值 | 合法回显；非法回落 `3m` | |
+| R-STAT-007 | 任何 | `homeSummary` 传本队 `teamId` | 回显该 `teamId`；榜单按该队过滤 | ✓ |
+| R-STAT-008 | 任何 | 报名后 `homeSummary` | `nextActivity.signedTeamId` 为本场报名队 | ✓ |
 | R-STAT-005 | U | `stats` | 游客可查 | |
 | R-STAT-006 | A | 删除有贡献的活动后 `stats` | 进球数回到基线（级联删贡献） | |
 
@@ -143,6 +148,7 @@
 
 ## 与 smoke 的分工
 
+- `npm test`：纯规则（比分、名额、鸽子、东八区时间窗、榜单汇总），不连云、不开开发者工具。代码在 `codeBase/cloudfunctions/api/rules.js`，用例在 `codeBase/test/rules.test.js`。跑法用 skill `unit-test`。
 - `npm run smoke`：每次改功能后跑，快，验证主路径没坏。检查项见 `doc/smoke-tests.md`。
 - `npm run regression`：上线体验版前跑，全量身份矩阵 + 页面显隐。中途会切换自己的身份，**必须用授权人账号登录开发者工具**，跑完自动恢复；异常中断跑 `npm run regression:restore`。
 - 新增云函数接口时：smoke 加一条检查（项目规则），regression 按身份矩阵补用例并更新本表。

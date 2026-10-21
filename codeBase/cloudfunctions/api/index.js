@@ -1,14 +1,19 @@
 const cloud = require('wx-server-sdk')
+const {
+  TEAMS,
+  assertNotAbsentWithStats,
+  normalizeQuotas,
+  parseScore,
+  periodRange,
+  recentStart,
+  topBy,
+  totalsByPlayer
+} = require('./rules')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 const db = cloud.database()
 const _ = db.command
-
-const TEAMS = [
-  { _id: 'team_jiong', name: 'jiong 路青少年' },
-  { _id: 'team_pudong', name: '浦东老聚三' }
-]
 
 exports.main = async (event) => {
   try {
@@ -64,7 +69,7 @@ async function ensureTeams() {
 
 async function getMe(openid) {
   const user = await ensureOwner(await findUser(openid))
-  return { user, teams: TEAMS }
+  return { user: await readableUser(user), teams: TEAMS }
 }
 
 async function saveProfile(openid, event) {
@@ -89,11 +94,11 @@ async function saveProfile(openid, event) {
     })
     user = { _id: added._id, _openid: openid, ...data }
   }
-  const profile = { teamId, userName: name, updatedAt: Date.now() }
+  const profile = { userName: name, updatedAt: Date.now() }
   if (avatarUrl !== undefined) profile.avatarUrl = avatarUrl
   await db.collection('signups').where({ _openid: openid }).update({ data: profile })
   await db.collection('contributions').where({ playerOpenid: openid }).update({ data: profile })
-  return { user: await ensureOwner(user) }
+  return { user: await readableUser(await ensureOwner(user)) }
 }
 
 async function listMembers(openid) {
@@ -102,7 +107,7 @@ async function listMembers(openid) {
   const users = res.data
     .map(publicUser)
     .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
-  return { users }
+  return { users: await readableAvatars(users) }
 }
 
 async function listPlayers() {
@@ -110,7 +115,7 @@ async function listPlayers() {
   const users = res.data
     .map(publicUser)
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-  return { users }
+  return { users: await readableAvatars(users) }
 }
 
 async function setAdmin(openid, event) {
@@ -173,11 +178,11 @@ async function activityDetail(activityId, openid) {
   return {
     activity,
     quotas,
-    signups,
+    signups: await readableAvatars(signups),
     rounds: roundRes.data,
-    contributions: contributionRes.data,
+    contributions: await readableAvatars(contributionRes.data),
     members: me && me.isAdmin ? await listMemberBriefs() : [],
-    me,
+    me: await readableUser(me),
     teams: TEAMS
   }
 }
@@ -238,7 +243,11 @@ async function signup(openid, event) {
   const activityId = event.activityId
   const activity = await mustGet('activities', activityId)
   if (activity.startTime <= Date.now()) throw new Error('活动已开始，不能报名')
-  const teamId = user.teamId
+  let teamId = user.teamId
+  if (event.teamId != null && event.teamId !== '') {
+    if (!TEAMS.some((team) => team._id === event.teamId)) throw new Error('请选择球队')
+    teamId = event.teamId
+  }
   await db.runTransaction(async (transaction) => {
     const existing = await transaction.collection('signups').where({ activityId, _openid: openid }).limit(1).get()
     const current = existing.data[0]
@@ -318,6 +327,17 @@ async function deleteContribution(openid, event) {
   return { removed: true }
 }
 
+async function requireSignup(activityId, playerOpenid) {
+  const player = await requireMember(playerOpenid)
+  const signed = await db.collection('signups').where({
+    activityId,
+    _openid: playerOpenid,
+    status: 'signed'
+  }).limit(1).get()
+  if (!signed.data[0]) throw new Error('只能给本场已报名的队员记数据')
+  return { player, signup: signed.data[0] }
+}
+
 async function setContribution(openid, event) {
   await requireAdmin(openid)
   const activityId = event.activityId
@@ -325,13 +345,13 @@ async function setContribution(openid, event) {
   const goals = parseScore(event.goals)
   const assists = parseScore(event.assists)
   const activity = await mustGet('activities', activityId)
-  const player = await requireMember(playerOpenid)
+  const { player, signup } = await requireSignup(activityId, playerOpenid)
   const found = await db.collection('contributions').where({ activityId, playerOpenid }).limit(1).get()
   const data = {
     activityId,
     playerOpenid,
     userName: player.name,
-    teamId: player.teamId,
+    teamId: signup.teamId || player.teamId,
     avatarUrl: player.avatarUrl || '',
     activityStartTime: activity.startTime,
     goals,
@@ -354,14 +374,14 @@ async function setAbsent(openid, event) {
   const playerOpenid = event.playerOpenid
   const absent = !!event.absent
   const activity = await mustGet('activities', activityId)
-  const player = await requireMember(playerOpenid)
+  const { player, signup } = await requireSignup(activityId, playerOpenid)
   const found = await db.collection('contributions').where({ activityId, playerOpenid }).limit(1).get()
   const previous = found.data[0]
   const data = {
     activityId,
     playerOpenid,
     userName: player.name,
-    teamId: player.teamId,
+    teamId: signup.teamId || player.teamId,
     avatarUrl: player.avatarUrl || '',
     activityStartTime: activity.startTime,
     goals: previous ? previous.goals || 0 : 0,
@@ -384,41 +404,36 @@ async function homeSummary(openid, event) {
   }).orderBy('startTime', 'asc').limit(20).get()
   const next = upcoming.data[0] || null
   let signedUp = false
+  let signedTeamId = ''
   if (next) {
     const mine = await db.collection('signups').where({
       activityId: next._id,
       _openid: openid,
       status: 'signed'
     }).limit(1).get()
-    signedUp = mine.data.length > 0
+    if (mine.data[0]) {
+      signedUp = true
+      signedTeamId = mine.data[0].teamId || ''
+    }
   }
-  const nextActivity = next ? { ...next, quotas: await quotasOf(next._id), signedUp } : null
+  const nextActivity = next
+    ? { ...next, quotas: await quotasOf(next._id), signedUp, signedTeamId }
+    : null
   const span = ['3m', '6m', '1y', '2y', '3y'].includes(event.span) ? event.span : '3m'
   const start = recentStart(span)
-  const totals = totalsByPlayer(await collect('contributions', {
-    activityStartTime: _.gte(start)
-  }))
+  const teamFilter = TEAMS.some((team) => team._id === event.teamId) ? event.teamId : ''
+  const where = { activityStartTime: _.gte(start) }
+  if (teamFilter) where.teamId = teamFilter
+  const totals = totalsByPlayer(await collect('contributions', where))
   return {
     nextActivity,
     span,
-    goalsTop: topBy(totals, 'goals'),
-    assistsTop: topBy(totals, 'assists'),
-    absencesTop: topBy(totals, 'absences'),
+    teamId: teamFilter,
+    goalsTop: await readableAvatars(topBy(totals, 'goals')),
+    assistsTop: await readableAvatars(topBy(totals, 'assists')),
+    absencesTop: await readableAvatars(topBy(totals, 'absences')),
     teams: TEAMS
   }
-}
-
-function recentStart(span) {
-  const months = { '3m': 3, '6m': 6, '1y': 12, '2y': 24, '3y': 36 }[span] || 3
-  const shifted = new Date(Date.now() + 8 * 60 * 60 * 1000)
-  return Date.UTC(
-    shifted.getUTCFullYear(),
-    shifted.getUTCMonth() - months,
-    shifted.getUTCDate(),
-    shifted.getUTCHours(),
-    shifted.getUTCMinutes(),
-    shifted.getUTCSeconds()
-  ) - 8 * 60 * 60 * 1000
 }
 
 async function stats(event) {
@@ -429,38 +444,7 @@ async function stats(event) {
   if (event.teamId) where.teamId = event.teamId
   const list = totalsByPlayer(await collect('contributions', where))
     .sort((a, b) => b.goals - a.goals || b.assists - a.assists || b.absences - a.absences)
-  return { list, teams: TEAMS, range }
-}
-
-function totalsByPlayer(rows) {
-  const byPlayer = {}
-  for (const row of rows) {
-    const key = row.playerOpenid
-    if (!byPlayer[key]) {
-      byPlayer[key] = {
-        playerOpenid: key,
-        userName: row.userName,
-        teamId: row.teamId,
-        avatarUrl: row.avatarUrl || '',
-        goals: 0,
-        assists: 0,
-        absences: 0
-      }
-    }
-    byPlayer[key].goals += row.goals || 0
-    byPlayer[key].assists += row.assists || 0
-    if (row.absent) byPlayer[key].absences += 1
-    byPlayer[key].userName = row.userName
-    byPlayer[key].avatarUrl = row.avatarUrl || byPlayer[key].avatarUrl
-  }
-  return Object.values(byPlayer)
-}
-
-function topBy(rows, field) {
-  return rows
-    .filter((row) => row[field] > 0)
-    .sort((a, b) => b[field] - a[field] || b.goals - a.goals)
-    .slice(0, 10)
+  return { list: await readableAvatars(list), teams: TEAMS, range }
 }
 
 async function collect(name, where) {
@@ -474,55 +458,6 @@ async function collect(name, where) {
     skip += pageSize
   }
   return all
-}
-
-function periodRange(event) {
-  const year = Number(event.year)
-  const type = event.periodType || 'month'
-  if (!year) throw new Error('请选择年份')
-  if (type === 'year') {
-    return { start: localDate(year, 0, 1), end: localDate(year + 1, 0, 1) }
-  }
-  if (type === 'quarter') {
-    const quarter = Number(event.quarter)
-    if (quarter < 1 || quarter > 4) throw new Error('请选择季度')
-    const month = (quarter - 1) * 3
-    return rangeFrom(year, month, 3)
-  }
-  const month = Number(event.month) - 1
-  if (month < 0 || month > 11) throw new Error('请选择月份')
-  return rangeFrom(year, month, 1)
-}
-
-function rangeFrom(year, monthIndex, span) {
-  const start = localDate(year, monthIndex, 1)
-  const end = localDate(year, monthIndex + span, 1)
-  return { start, end }
-}
-
-function localDate(year, monthIndex, day) {
-  return Date.UTC(year, monthIndex, day) - 8 * 60 * 60 * 1000
-}
-
-function assertNotAbsentWithStats(absent, goals, assists) {
-  if (absent && ((goals || 0) !== 0 || (assists || 0) !== 0)) {
-    throw new Error('鸽子的情况下，进球和助攻得是 0')
-  }
-}
-
-function parseScore(value) {
-  const number = Number(value)
-  if (!Number.isInteger(number) || number < 0 || number > 99) throw new Error('比分和数据请填 0 到 99 的整数')
-  return number
-}
-
-function normalizeQuotas(input) {
-  const source = input || {}
-  return TEAMS.map((team) => {
-    const raw = source[team._id] == null ? 12 : Number(source[team._id])
-    if (!Number.isInteger(raw) || raw < 1 || raw > 30) throw new Error(`${team.name} 的名额为 1 到 30`)
-    return { teamId: team._id, maxSignups: raw }
-  })
 }
 
 async function quotasOf(activityId) {
@@ -580,6 +515,36 @@ async function ensureOwner(user) {
   if (!first || first._id !== user._id) return user
   await db.collection('users').doc(user._id).update({ data: { canGrantAdmin: true } })
   return { ...user, canGrantAdmin: true }
+}
+
+async function readableUser(user) {
+  if (!user) return user
+  const [next] = await readableAvatars([user])
+  return next
+}
+
+async function readableAvatars(rows) {
+  const list = rows || []
+  const ids = [...new Set(list
+    .map((row) => row && row.avatarUrl)
+    .filter((url) => typeof url === 'string' && url.startsWith('cloud://')))]
+  if (!ids.length) return list
+  const map = {}
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50)
+    try {
+      const res = await cloud.getTempFileURL({
+        fileList: chunk.map((fileID) => ({ fileID, maxAge: 86400 }))
+      })
+      for (const item of res.fileList || []) {
+        if (item && item.status === 0 && item.tempFileURL) map[item.fileID] = item.tempFileURL
+      }
+    } catch (error) {
+      // 换链失败时保留原 fileID，避免整页名单失败
+    }
+  }
+  if (!Object.keys(map).length) return list
+  return list.map((row) => (row && map[row.avatarUrl] ? { ...row, avatarUrl: map[row.avatarUrl] } : row))
 }
 
 function publicUser(user) {

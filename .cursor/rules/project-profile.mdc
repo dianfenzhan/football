@@ -15,9 +15,9 @@ alwaysApply: true
 | Constitution | 无（不走 speckit；专属要求见下方「项目专属要求」） |
 | 原则映射 | 无（不走 speckit） |
 | 异常类型 | 无（云函数按现有 `api` 云函数的返回约定） |
-| 测试命令 | 无单元测试基建；现有验证 = `npm run smoke`（日常改动后）、`npm run regression`（上线体验版前全量；需开发者工具自动化端口 9421） |
+| 测试命令 | `npm test`（纯规则，`node --test`，不连云）；`npm run smoke`（日常改动后）；`npm run regression`（上线体验版前全量；需开发者工具自动化端口 9421） |
 | 序列化断言方式 | 无 |
-| 本机验证 skill | `/smoke-test`（走微信开发者工具调云函数；不部署、不改密钥、不调 `setAdmin`）、`/regression-test`（全量身份矩阵；中途切换登录号身份，跑完自动恢复，中断跑 `npm run regression:restore`） |
+| 本机验证 skill | `/unit-test`（纯规则，不连云）、`/smoke-test`（走微信开发者工具调云函数；不部署、不改密钥、不调 `setAdmin`）、`/regression-test`（全量身份矩阵；中途切换登录号身份，跑完自动恢复，中断跑 `npm run regression:restore`） |
 | 冒烟脚本目录 | `codeBase/scripts/`（`smoke-test.js`；检查项说明在 `doc/smoke-tests.md`；全量回归 `regression-test.js` + `regression-restore.js`，用例说明在 `doc/test-cases.md`） |
 | 开发分支 / 联调分支 | 无（单人项目，直接在主分支） |
 | 方法论文档 | `doc/features.md`、`doc/smoke-tests.md`、`doc/test-cases.md`；对齐用 `/doc-anchored` |
