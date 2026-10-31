@@ -28,10 +28,10 @@ disable-model-invocation: true
 
 | 项 | 结果 |
 | --- | --- |
-| 用例 | 12 pass / 0 fail |
+| 用例 | N pass / 0 fail |
 | 命令 | npm test |
 
-未覆盖：报名事务、满员、管理员权限、云数据库、页面点击。这些走 `/smoke-test` 和 `/regression-test`。
+未覆盖：报名事务、满员、管理员权限、云数据库、页面点击。这些走 `/smoke-test`。
 ```
 
 失败时把第一条断言差异放在表后面。
@@ -40,4 +40,4 @@ disable-model-invocation: true
 
 行为变了，规则和用例一起改。新增纯函数时导出它，并在 `rules.test.js` 加断言。时间用固定的 `+08:00` 时刻，不要用 `Date.now()`。
 
-仍交给冒烟或回归的：云数据库读写、事务、身份、页面。
+仍交给冒烟的：云数据库读写、事务、身份、页面。

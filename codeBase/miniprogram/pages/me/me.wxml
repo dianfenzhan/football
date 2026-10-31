@@ -22,6 +22,18 @@
         bindtap="onTeam"
       >{{item.name}}</view>
     </view>
+    <view class="field">
+      <text class="label">擅长位置</text>
+      <view class="reg-positions">
+        <view
+          wx:for="{{positions}}"
+          wx:key="id"
+          class="reg-pos {{preferredPosition === item.id ? 'active' : ''}}"
+          data-id="{{item.id}}"
+          bindtap="onPosition"
+        >{{item.label}}</view>
+      </view>
+    </view>
     <button class="btn" loading="{{saving}}" disabled="{{saving}}" bindtap="save">保存</button>
   </view>
   <view class="card" wx:if="{{canGrantAdmin}}">
@@ -37,4 +49,5 @@
     </view>
   </view>
   <nav current="me" />
+  <mirror />
 </view>

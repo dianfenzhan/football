@@ -1,5 +1,13 @@
 {
+  "timeout": 20,
   "permissions": {
-    "openapi": []
-  }
+    "openapi": ["subscribeMessage.send"]
+  },
+  "triggers": [
+    {
+      "name": "kickoffReminders",
+      "type": "timer",
+      "config": "0 */1 * * * * *"
+    }
+  ]
 }

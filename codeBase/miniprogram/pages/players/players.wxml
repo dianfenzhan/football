@@ -9,14 +9,64 @@
         bindtap="onTeam"
       >{{item.name}}</view>
     </view>
+    <view wx:if="{{isAdmin}}" class="muted admin-tip">管理员可点击任意队员修改昵称、头像和擅长位置</view>
   </view>
   <view class="card" wx:if="{{!loading && players.length === 0}}">
     <view class="muted">该球队还没有队员</view>
   </view>
-  <view class="card player-row" wx:for="{{players}}" wx:key="_id">
+  <view
+    class="card player-row"
+    wx:for="{{players}}"
+    wx:key="_id"
+    data-id="{{item._id}}"
+    bindtap="onTapPlayer"
+  >
     <image wx:if="{{item.avatarUrl}}" class="avatar" src="{{item.avatarUrl}}" mode="aspectFill"/>
     <view wx:else class="avatar-fallback" style="background: {{item.avatarBg}};">{{item.avatarChar}}</view>
-    <text>{{item.name}}</text>
+    <view class="player-info">
+      <text class="player-name">{{item.name}}</text>
+      <text wx:if="{{item.isCaptain}}" class="admin-tag">队长</text>
+      <text wx:elif="{{item.isAdmin}}" class="admin-tag">管理员</text>
+    </view>
+    <view class="player-right">
+      <text class="pos-badge">{{item.positionLabel}}</text>
+      <text wx:if="{{isAdmin}}" class="edit-hint">编辑 ›</text>
+    </view>
   </view>
+
+  <view wx:if="{{showEditModal}}" class="modal-mask" catchtouchmove="noop">
+    <view class="modal-card">
+      <view class="title">修改队员资料</view>
+      <view class="edit-avatar-row">
+        <button class="avatar-chooser" open-type="chooseAvatar" bind:chooseavatar="onChooseEditAvatar">
+          <image wx:if="{{editAvatarPreview}}" class="avatar-img" src="{{editAvatarPreview}}" mode="aspectFill"/>
+          <view wx:else class="avatar-fallback chooser-fallback" style="background: {{editAvatarBg}};">{{editAvatarChar}}</view>
+        </button>
+        <view class="muted">点击更换头像</view>
+      </view>
+      <view class="field">
+        <text class="label">昵称</text>
+        <input class="input" value="{{editName}}" bindinput="onEditName" placeholder="队员昵称" />
+      </view>
+      <view class="field">
+        <text class="label">擅长位置</text>
+        <view class="reg-positions">
+          <view
+            wx:for="{{positions}}"
+            wx:key="id"
+            class="reg-pos {{editPosition === item.id ? 'active' : ''}}"
+            data-id="{{item.id}}"
+            bindtap="onEditPosition"
+          >{{item.label}}</view>
+        </view>
+      </view>
+      <view class="modal-actions">
+        <button class="btn ghost modal-btn" disabled="{{savingPlayer}}" bindtap="closeEditModal">取消</button>
+        <button class="btn modal-btn" loading="{{savingPlayer}}" disabled="{{savingPlayer}}" bindtap="saveEditPlayer">保存</button>
+      </view>
+    </view>
+  </view>
+
   <nav current="players" />
+  <mirror />
 </view>

@@ -9,6 +9,7 @@ const SPANS = [
 const BOARDS = [
   { id: 'goals', name: '⚽️ 进球', empty: '还没有进球', field: 'goals', miss: false },
   { id: 'assists', name: '👟 助攻', empty: '还没有助攻', field: 'assists', miss: false },
+  { id: 'attendances', name: '🏃 出勤', empty: '还没有出勤', field: 'attendances', miss: false },
   { id: 'absences', name: '🐦 鸽子', empty: '还没有鸽子', field: 'absences', miss: true },
 ]
 
@@ -74,6 +75,7 @@ Page({
       const lists = {
         goals: decorate(res.goalsTop, 'goals', teams),
         assists: decorate(res.assistsTop, 'assists', teams),
+        attendances: decorate(res.attendancesTop, 'attendances', teams),
         absences: decorate(res.absencesTop, 'absences', teams),
       }
       this._lists = lists

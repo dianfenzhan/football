@@ -1,0 +1,60 @@
+<view class="card {{embedded ? 'embedded' : ''}}" wx:if="{{hours.length}}">
+  <view class="head">
+    <view class="title-block">
+      <view class="title">球局当天天气</view>
+      <view class="date" wx:if="{{dateLabel && !embedded}}">{{dateLabel}}</view>
+    </view>
+    <view class="sun" wx:if="{{sunrise || sunset}}">
+      <text wx:if="{{sunrise}}">日出 {{sunrise}}</text>
+      <text wx:if="{{sunrise && sunset}}" class="dot">·</text>
+      <text wx:if="{{sunset}}">日落 {{sunset}}</text>
+    </view>
+  </view>
+  <view wx:if="{{!embedded}}" class="venue">📍 {{venueAddress}}</view>
+
+  <view class="chart-wrap"
+    bindtouchstart="onTouchStart"
+    bindtouchmove="onTouchMove"
+    catchtouchmove="onTouchMove"
+    bindtouchend="onTouchEnd"
+    bindtouchcancel="onTouchEnd"
+  >
+    <canvas type="2d" id="weatherCanvas" class="chart-canvas"></canvas>
+    <view class="icons">
+      <view
+        wx:for="{{axisHours}}"
+        wx:key="hour"
+        class="icon-slot"
+        style="left: {{item.left}}%;"
+      >{{item.icon}}</view>
+    </view>
+  </view>
+
+  <view class="axis">
+    <text wx:for="{{axisHours}}" wx:key="hour" class="axis-label">{{item.label}}</text>
+  </view>
+
+  <view class="row">
+    <text class="row-label">空气</text>
+    <view class="aqi-track">
+      <view
+        wx:for="{{hours}}"
+        wx:key="hour"
+        class="aqi-seg tone-{{item.aqiTone}} {{selectedIndex === index ? 'on' : ''}}"
+      >
+        <text wx:if="{{selectedIndex === index}}" class="aqi-float">{{item.aqiLevel}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="row wind-row">
+    <text class="row-label">风力</text>
+    <view class="wind-track">
+      <text
+        wx:for="{{axisHours}}"
+        wx:key="hour"
+        class="wind-cell"
+      >{{item.windLevel}}级</text>
+    </view>
+  </view>
+</view>

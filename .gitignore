@@ -27,6 +27,7 @@ codeBase/project.private.config.json
 **/private.*.key
 doc/project/private.*.key
 doc/project/secrets.local.json
+codeBase/cloudfunctions/api/subscribe.local.js
 **/.env
 **/.env.*
 !**/.env.example

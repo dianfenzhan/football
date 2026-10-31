@@ -1,10 +1,13 @@
 const { call, teamName, sortTeamsByMine, uploadAvatar, avatarChar, avatarColor } = require('../../utils/api')
+const { PREFERRED_POSITIONS } = require('../../utils/tactics')
 
 Page({
   data: {
     teams: [],
+    positions: PREFERRED_POSITIONS,
     name: '',
     teamId: '',
+    preferredPosition: 'mf',
     avatarUrl: '',
     tempAvatar: '',
     avatarPreview: '',
@@ -27,6 +30,7 @@ Page({
         teams,
         name,
         teamId: user ? user.teamId : '',
+        preferredPosition: (user && user.preferredPosition) || 'mf',
         avatarChar: avatarChar(name),
         avatarBg: avatarColor(name),
         isAdmin: !!(user && user.isAdmin),
@@ -90,6 +94,7 @@ Page({
     this.setData({ avatarBroken: true })
   },
   onTeam(event) { this.setData({ teamId: event.currentTarget.dataset.id }) },
+  onPosition(event) { this.setData({ preferredPosition: event.currentTarget.dataset.id }) },
   save() {
     if (this.data.saving) return
     if (!this.data.name.trim()) {
@@ -98,12 +103,17 @@ Page({
     }
     this.setData({ saving: true })
     const finish = (avatarUrl) => {
-      const payload = { name: this.data.name, teamId: this.data.teamId }
+      const payload = {
+        name: this.data.name,
+        teamId: this.data.teamId,
+        preferredPosition: this.data.preferredPosition || 'mf'
+      }
       if (typeof avatarUrl === 'string') payload.avatarUrl = avatarUrl
       call('saveProfile', payload).then((res) => {
         this.setData({
           avatarUrl: res.user.avatarUrl || '',
           avatarPreview: res.user.avatarUrl || '',
+          preferredPosition: res.user.preferredPosition || this.data.preferredPosition || 'mf',
           tempAvatar: '',
           isAdmin: !!res.user.isAdmin,
           canGrantAdmin: !!res.user.canGrantAdmin,

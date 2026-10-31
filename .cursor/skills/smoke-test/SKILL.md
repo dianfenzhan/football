@@ -13,10 +13,17 @@ disable-model-invocation: true
 
 ## 执行
 
-在 `codeBase/` 下做。不要部署云函数，不要改 `.env` 或密钥，不要调用 `setAdmin`。
+在 `codeBase/` 下做。不要改 `.env` 或密钥，不要调用 `setAdmin`。冒烟前先部署云函数 `api`，脚本打的是当前云上的函数。
 
-1. 若 `node -e "require('miniprogram-automator')"` 失败，在 `codeBase/` 执行 `npm install --save-dev miniprogram-automator`。只装项目依赖，不装全局包。
-2. 确认 `9421` 在监听。没有的话后台启动自动化端口，再等它起来（最多约 30 秒）：
+1. 若 `node -e "require('miniprogram-automator')"` 失败，在 `codeBase/` 执行 `npm install --save-dev miniprogram-automator`。只装项目依赖，不装全局包。若 `node -e "require('miniprogram-ci')"` 失败，同样在 `codeBase/` 执行 `npm install --save-dev miniprogram-ci`。
+2. 部署云函数，只上传 `api`，不打预览包：
+
+```bash
+node scripts/deploy-cloud.js --function-only
+```
+
+环境 ID 用 `miniprogram/cloud-env.js`（或 `--envId`、`WX_CLOUD_ENV_ID`）。上传密钥用已有的 `doc/project/private.*.key`，不要把密钥写进代码或文档，不要打印密钥。部署失败就停，说明原因，不要改业务代码。
+3. 确认 `9421` 在监听。没有的话后台启动自动化端口，再等它起来（最多约 30 秒）：
 
 ```bash
 /Applications/wechatwebdevtools.app/Contents/MacOS/cli auto \
@@ -24,9 +31,9 @@ disable-model-invocation: true
 ```
 
 开发者工具里要登录一个**已经是管理员**的微信号。端口换了就设 `AUTO_WS`。
-3. 跑 `npm run smoke`。脚本连上 `ws://127.0.0.1:9421`，用当前登录身份调云函数 `api`。
-4. 失败时看第一条 `FAIL`。端口、依赖、工具没开，修好再跑一次。云函数报「未部署」或身份错误，停下来说明原因，不要改业务代码。
-5. 按下面的格式回复。`PASS` 行抄脚本输出，不要手写没跑过的通过。
+4. 跑 `npm run smoke`。脚本连上 `ws://127.0.0.1:9421`，用当前登录身份调云函数 `api`。
+5. 失败时看第一条 `FAIL`。端口、依赖、工具没开，修好再跑一次。云函数报「未部署」或身份错误，停下来说明原因，不要改业务代码。
+6. 按下面的格式回复。`PASS` 行抄脚本输出，不要手写没跑过的通过。
 
 ## 报告
 

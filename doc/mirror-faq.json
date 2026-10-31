@@ -1,0 +1,432 @@
+{
+  "version": 1,
+  "matchThreshold": 0.72,
+  "items": [
+    {
+      "id": "onboarding-profile",
+      "module": "roster",
+      "kind": "static",
+      "live": null,
+      "questions": [
+        "怎么开始用",
+        "第一次怎么弄",
+        "为什么不能报名",
+        "要先填什么资料",
+        "名字和球队在哪填"
+      ],
+      "answer": "先去「我的」填姓名和球队并保存。没建档不能报名。",
+      "answerTemplate": null,
+      "tags": [
+        "我的",
+        "资料",
+        "报名"
+      ],
+      "emptyAnswer": null
+    },
+    {
+      "id": "whats-new",
+      "module": "roster",
+      "kind": "static",
+      "live": null,
+      "questions": [
+        "这次更新了什么",
+        "更新了什么功能",
+        "有什么新功能",
+        "最近加了什么",
+        "新版本有什么",
+        "这次改了啥",
+        "最近更新了啥"
+      ],
+      "answer": "最近加了：魔镜助手、首页天气、4 小时内取消记鸽子、后补截止与自动顶上、战术板、联合报名。想问哪块直接说。",
+      "answerTemplate": null,
+      "tags": [
+        "更新",
+        "新功能"
+      ],
+      "emptyAnswer": null
+    },
+    {
+      "id": "next-when",
+      "module": "next",
+      "kind": "live",
+      "live": "next",
+      "questions": [
+        "下一场什么时候",
+        "什么时候踢球",
+        "最近一场几点",
+        "下场球局时间",
+        "还有几天踢球"
+      ],
+      "answer": null,
+      "answerTemplate": "{{whenText}}，{{place}}。",
+      "tags": [
+        "下一场",
+        "时间"
+      ],
+      "emptyAnswer": "最近没有球局。"
+    },
+    {
+      "id": "next-place",
+      "module": "next",
+      "kind": "live",
+      "live": "next",
+      "questions": [
+        "下一场在哪踢",
+        "场地在哪里",
+        "球局地点"
+      ],
+      "answer": null,
+      "answerTemplate": "地点 {{place}}，时间 {{whenText}}。",
+      "tags": [
+        "地点",
+        "下一场"
+      ],
+      "emptyAnswer": "最近没有球局。"
+    },
+    {
+      "id": "next-signed",
+      "module": "next",
+      "kind": "live",
+      "live": "next",
+      "questions": [
+        "我报名了吗",
+        "我报上了没",
+        "我报的哪一队",
+        "这场我进没进名单"
+      ],
+      "answer": null,
+      "answerTemplate": "{{signedText}}",
+      "tags": [
+        "报名",
+        "我"
+      ],
+      "emptyAnswer": "最近没有球局。"
+    },
+    {
+      "id": "next-quota",
+      "module": "next",
+      "kind": "live",
+      "live": "next",
+      "questions": [
+        "还差几人",
+        "还有没有名额",
+        "报名满了吗",
+        "各队报了多少人"
+      ],
+      "answer": null,
+      "answerTemplate": "{{quotaText}}",
+      "tags": [
+        "名额",
+        "报名"
+      ],
+      "emptyAnswer": "最近没有球局。"
+    },
+    {
+      "id": "signup-how",
+      "module": "signup",
+      "kind": "static",
+      "live": null,
+      "questions": [
+        "怎么报名",
+        "如何报名",
+        "去哪里报名",
+        "报名入口在哪"
+      ],
+      "answer": "首页点「去报名」，或进「活动」页那一场报名。先在「我的」建档。",
+      "answerTemplate": null,
+      "tags": [
+        "报名"
+      ],
+      "emptyAnswer": null
+    },
+    {
+      "id": "signup-full-waitlist",
+      "module": "signup",
+      "kind": "static",
+      "live": null,
+      "questions": [
+        "人满了怎么办",
+        "本队满了怎么报",
+        "能不能后补",
+        "后补怎么弄",
+        "后补功能怎么用",
+        "后补功能怎么用？",
+        "怎么后补"
+      ],
+      "answer": "本队正选满了：选「后补本队」或「改报对面」。后补要授权通知并选守到何时；有人退出会自动顶上。",
+      "answerTemplate": null,
+      "tags": [
+        "后补",
+        "名额"
+      ],
+      "emptyAnswer": null
+    },
+    {
+      "id": "signup-joint",
+      "module": "signup",
+      "kind": "static",
+      "live": null,
+      "questions": [
+        "联合报名是什么",
+        "联合报名是什么？",
+        "什么是联合报名",
+        "联合报名怎么报",
+        "联合场怎么报名"
+      ],
+      "answer": "联合报名分主队、联队、对方三组，每组 8 人。按本队→联队→对方占坑，都满进共享后补。",
+      "answerTemplate": null,
+      "tags": [
+        "联合",
+        "报名"
+      ],
+      "emptyAnswer": null
+    },
+    {
+      "id": "signup-cancel-pigeon",
+      "module": "signup",
+      "kind": "static",
+      "live": null,
+      "questions": [
+        "取消报名会记鸽子吗",
+        "取消报名算鸽子吗",
+        "取消报名算鸽子吗？",
+        "临期取消算不算鸽子",
+        "开赛前取消有没有责",
+        "鸽子怎么产生的",
+        "取消后补有责吗"
+      ],
+      "answer": "正选开赛前不足 4 小时取消记鸽子；提前取消或取消后补不记。开赛前再报上，系统鸽子会清掉。",
+      "answerTemplate": null,
+      "tags": [
+        "取消",
+        "鸽子"
+      ],
+      "emptyAnswer": null
+    },
+    {
+      "id": "signup-move-swap",
+      "module": "signup",
+      "kind": "static",
+      "live": null,
+      "questions": [
+        "怎么换队",
+        "能不能换到另一队",
+        "对调怎么弄",
+        "长按拖名字干什么"
+      ],
+      "answer": "长按自己拖到有空位的队即可换队。对调请找管理员。后补不能对调。",
+      "answerTemplate": null,
+      "tags": [
+        "换队",
+        "对调"
+      ],
+      "emptyAnswer": null
+    },
+    {
+      "id": "signup-remind",
+      "module": "signup",
+      "kind": "static",
+      "live": null,
+      "questions": [
+        "开赛通知什么时候发",
+        "为什么没有提醒",
+        "后补升上会通知吗",
+        "要授权什么通知"
+      ],
+      "answer": "正选授权「活动开始通知」，开赛前 2 小时发。后补再授权「报名候补通知」，升正选时发。",
+      "answerTemplate": null,
+      "tags": [
+        "通知",
+        "订阅"
+      ],
+      "emptyAnswer": null
+    },
+    {
+      "id": "weather-kickoff",
+      "module": "weather",
+      "kind": "live",
+      "live": "weather",
+      "questions": [
+        "下周天气怎么样",
+        "踢球那天天气",
+        "会不会下雨",
+        "界龙天气如何",
+        "开赛时气温多少"
+      ],
+      "answer": null,
+      "answerTemplate": "{{kickoffWeather}}",
+      "tags": [
+        "天气",
+        "雨"
+      ],
+      "emptyAnswer": "这次没拿到天气。"
+    },
+    {
+      "id": "stats-where",
+      "module": "stats",
+      "kind": "static",
+      "live": null,
+      "questions": [
+        "数据在哪看",
+        "进球榜在哪",
+        "怎么看出勤",
+        "鸽子榜在哪"
+      ],
+      "answer": "底部「数据」页看榜；单场明细在对应活动页。",
+      "answerTemplate": null,
+      "tags": [
+        "数据",
+        "榜"
+      ],
+      "emptyAnswer": null
+    },
+    {
+      "id": "stats-goals-top",
+      "module": "stats",
+      "kind": "live",
+      "live": "stats",
+      "questions": [
+        "谁进球最多",
+        "进球榜前几名",
+        "最近进球王是谁"
+      ],
+      "answer": null,
+      "answerTemplate": "{{spanText}}{{teamText}}进球榜：{{boardText}}",
+      "tags": [
+        "进球"
+      ],
+      "emptyAnswer": "这段还没有榜单。"
+    },
+    {
+      "id": "stats-assists-top",
+      "module": "stats",
+      "kind": "live",
+      "live": "stats",
+      "questions": [
+        "谁助攻最多",
+        "助攻榜"
+      ],
+      "answer": null,
+      "answerTemplate": "{{spanText}}{{teamText}}助攻榜：{{boardText}}",
+      "tags": [
+        "助攻"
+      ],
+      "emptyAnswer": "这段还没有榜单。"
+    },
+    {
+      "id": "stats-attendance-top",
+      "module": "stats",
+      "kind": "live",
+      "live": "stats",
+      "questions": [
+        "谁出勤最多",
+        "出勤榜",
+        "谁来得最勤"
+      ],
+      "answer": null,
+      "answerTemplate": "{{spanText}}{{teamText}}出勤榜：{{boardText}}",
+      "tags": [
+        "出勤"
+      ],
+      "emptyAnswer": "这段还没有榜单。"
+    },
+    {
+      "id": "stats-absent-top",
+      "module": "stats",
+      "kind": "live",
+      "live": "stats",
+      "questions": [
+        "鸽子榜",
+        "谁鸽子最多",
+        "缺勤榜"
+      ],
+      "answer": null,
+      "answerTemplate": "{{spanText}}{{teamText}}鸽子榜：{{boardText}}",
+      "tags": [
+        "鸽子"
+      ],
+      "emptyAnswer": "这段还没有榜单。"
+    },
+    {
+      "id": "stats-me",
+      "module": "stats",
+      "kind": "live",
+      "live": "me-stats",
+      "questions": [
+        "我进了几个球",
+        "我的助攻",
+        "我出勤多少",
+        "我有几次鸽子",
+        "我的数据怎么样"
+      ],
+      "answer": null,
+      "answerTemplate": "{{spanText}}{{teamText}}你的数据：{{myText}}",
+      "tags": [
+        "我",
+        "进球",
+        "助攻",
+        "出勤",
+        "鸽子"
+      ],
+      "emptyAnswer": "这段你还没有数据。"
+    },
+    {
+      "id": "tactics-who",
+      "module": "tactics",
+      "kind": "static",
+      "live": null,
+      "questions": [
+        "战术板谁能改",
+        "站位怎么调",
+        "轮换名单在哪",
+        "能不能导出海报"
+      ],
+      "answer": "活动页名单下是战术板。仅本场正选可改站位并保存；其他人可看、可导出海报。",
+      "answerTemplate": null,
+      "tags": [
+        "战术板"
+      ],
+      "emptyAnswer": null
+    },
+    {
+      "id": "roster-edit",
+      "module": "roster",
+      "kind": "static",
+      "live": null,
+      "questions": [
+        "怎么改名字",
+        "怎么换头像",
+        "擅长位置怎么选",
+        "换球队在哪改"
+      ],
+      "answer": "在「我的」改头像、昵称、球队和位置，保存即可。",
+      "answerTemplate": null,
+      "tags": [
+        "我的",
+        "头像",
+        "昵称"
+      ],
+      "emptyAnswer": null
+    },
+    {
+      "id": "admin-only",
+      "module": "admin",
+      "kind": "static",
+      "live": null,
+      "questions": [
+        "怎么新建活动",
+        "谁能记比分",
+        "谁能记进球",
+        "怎么删活动",
+        "名额怎么改"
+      ],
+      "answer": "新建活动、改人数、记比分和数据只有管理员能做；删活动只有授权人。请找管理员。",
+      "answerTemplate": null,
+      "tags": [
+        "管理员",
+        "活动"
+      ],
+      "emptyAnswer": null
+    }
+  ]
+}

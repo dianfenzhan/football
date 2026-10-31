@@ -1,6 +1,7 @@
 {
   "usingComponents": {
-    "nav": "/components/nav/nav"
+    "nav": "/components/nav/nav",
+    "weather-hour": "/components/weather-hour/weather-hour"
   },
   "navigationBarTitleText": "首页",
   "enableShareAppMessage": true

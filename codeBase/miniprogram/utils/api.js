@@ -24,9 +24,13 @@ function formatTime(timestamp) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+const UNITE_TEAM = { _id: 'team_unite', name: '联队' }
+
 function teamName(teams, teamId) {
   const team = (teams || []).find((item) => item._id === teamId)
-  return team ? team.name : ''
+  if (team) return team.name
+  if (teamId === UNITE_TEAM._id) return UNITE_TEAM.name
+  return ''
 }
 
 function sortTeamsByMine(teams, myTeamId) {

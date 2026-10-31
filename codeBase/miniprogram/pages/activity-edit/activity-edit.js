@@ -26,7 +26,8 @@ Page({
       team_jiong: '11',
       team_pudong: '11'
     },
-    saving: false
+    saving: false,
+    signupMode: 'split'
   },
   onLoad() {
     const when = nextWednesdayAt20(new Date())
@@ -42,6 +43,11 @@ Page({
       const myTeamId = (res.user && res.user.teamId) || 'team_jiong'
       this.setData({ teams: sortTeamsByMine(res.teams || [], myTeamId) })
     })
+  },
+  onMode(event) {
+    const mode = event.currentTarget.dataset.mode
+    if (mode !== 'split' && mode !== 'joint') return
+    this.setData({ signupMode: mode })
   },
   onTitle(event) { this.setData({ title: event.detail.value }) },
   onLocation(event) { this.setData({ location: event.detail.value }) },
@@ -66,9 +72,10 @@ Page({
       title: this.data.title,
       location: this.data.location,
       startTime,
-      quotas
+      quotas,
+      signupMode: this.data.signupMode || 'split'
     }).then((res) => {
-      wx.redirectTo({ url: `/pages/activity/activity?id=${res.activityId}&share=1` })
+      wx.redirectTo({ url: `/pages/activity/activity?id=${res.activityId}` })
     }).catch(() => this.setData({ saving: false }))
   }
 })

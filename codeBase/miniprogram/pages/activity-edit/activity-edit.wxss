@@ -1,1 +1,77 @@
+.mode-row {
+  display: flex;
+  gap: 16rpx;
+}
 
+.mode-card {
+  flex: 1;
+  min-width: 0;
+  background: #f4f6f5;
+  border: 2rpx solid #e4ebe7;
+  border-radius: 18rpx;
+  padding: 22rpx 18rpx 20rpx;
+  box-sizing: border-box;
+}
+
+.mode-card.active {
+  background: #e8f3ee;
+  border-color: #0f3d2e;
+  box-shadow: 0 6rpx 18rpx rgba(15, 61, 46, 0.12);
+}
+
+.mode-head {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.mode-mark {
+  width: 18rpx;
+  height: 18rpx;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 3rpx solid #9aada4;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.mode-card.active .mode-mark {
+  border-color: #0f3d2e;
+  background: #0f3d2e;
+  box-shadow: 0 0 0 4rpx rgba(15, 61, 46, 0.16);
+}
+
+.mode-title {
+  font-size: 36rpx;
+  font-weight: 800;
+  letter-spacing: 6rpx;
+  line-height: 1.2;
+  color: #243832;
+}
+
+.mode-card.active .mode-title {
+  color: #0f3d2e;
+}
+
+.mode-tag {
+  display: inline-block;
+  margin-top: 14rpx;
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  font-weight: 600;
+  color: #6b7a74;
+  background: rgba(15, 61, 46, 0.06);
+}
+
+.mode-card.active .mode-tag {
+  color: #0f3d2e;
+  background: rgba(15, 61, 46, 0.12);
+}
+
+.mode-desc {
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  line-height: 1.45;
+  color: #6a7872;
+}

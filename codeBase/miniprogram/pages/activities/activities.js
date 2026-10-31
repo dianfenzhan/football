@@ -4,6 +4,7 @@ Page({
   data: {
     activities: [],
     isAdmin: false,
+    canDelete: false,
     myTeamId: 'team_jiong',
     loading: true,
     loadingMore: false,
@@ -38,6 +39,7 @@ Page({
         activities,
         ...(reset && profile ? {
           isAdmin: !!(profile.user && profile.user.isAdmin),
+          canDelete: !!(profile.user && profile.user.canGrantAdmin),
           myTeamId
         } : {}),
         page,
@@ -64,7 +66,7 @@ Page({
     return this._deleteWidth
   },
   onTouchStart(event) {
-    if (!this.data.isAdmin) return
+    if (!this.data.canDelete) return
     const touch = event.touches[0]
     const index = event.currentTarget.dataset.index
     this.touch = {

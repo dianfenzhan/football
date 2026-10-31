@@ -1,0 +1,84 @@
+<view class="mirror-root">
+  <movable-area class="drag-area {{open ? 'fab-hide' : ''}}">
+    <movable-view
+      class="fab-wrap"
+      direction="all"
+      inertia="{{true}}"
+      out-of-bounds="{{false}}"
+      x="{{fabX}}"
+      y="{{fabY}}"
+      bindchange="onFabChange"
+      bindtap="openPanel"
+    >
+      <view class="fab" aria-role="button" aria-label="AI 助手">
+        <view class="bot-head">
+          <view class="bot-antenna"></view>
+          <view class="bot-face">
+            <view class="bot-eye"></view>
+            <view class="bot-eye"></view>
+          </view>
+        </view>
+        <view class="ai-spark">✦</view>
+        <view class="ai-tag">AI</view>
+      </view>
+      <view class="quota-badge">剩{{remaining}}次</view>
+    </movable-view>
+  </movable-area>
+
+  <view wx:if="{{open}}" class="mask" bindtap="closePanel" catchtouchmove="noop"></view>
+  <view wx:if="{{open}}" class="sheet" catchtap="noop">
+    <view class="sheet-head">
+      <view class="sheet-brand">
+        <view class="sheet-icon">
+          <view class="bot-head sm">
+            <view class="bot-antenna"></view>
+            <view class="bot-face">
+              <view class="bot-eye"></view>
+              <view class="bot-eye"></view>
+            </view>
+          </view>
+        </view>
+        <view>
+          <view class="sheet-title">AI 助手</view>
+          <view class="sheet-sub">本周还可问 {{remaining}} / {{weekLimit}} 次</view>
+        </view>
+      </view>
+      <view class="sheet-close" bindtap="closePanel">关闭</view>
+    </view>
+    <scroll-view scroll-x class="quick-row" enable-flex>
+      <view
+        wx:for="{{quickQuestions}}"
+        wx:key="*this"
+        class="quick"
+        data-q="{{item}}"
+        bindtap="onQuick"
+      >{{item}}</view>
+    </scroll-view>
+    <scroll-view scroll-y class="chat" scroll-into-view="{{scrollInto}}">
+      <view wx:if="{{!messages.length}}" class="hint">点上面常用问题更快。每周共 {{weekLimit}} 次问答。</view>
+      <block wx:for="{{messages}}" wx:key="id">
+        <view id="msg-{{item.id}}" class="msg {{item.role}}">
+          <text>{{item.display || item.text}}</text>
+          <view wx:if="{{item.role === 'bot' && item.done && !item.feedback && item.logId}}" class="fb">
+            <view class="fb-btn" data-id="{{item.id}}" data-useful="1" bindtap="onFeedback">有用</view>
+            <view class="fb-btn ghost" data-id="{{item.id}}" data-useful="0" bindtap="onFeedback">没用</view>
+          </view>
+          <view wx:if="{{item.feedback}}" class="fb-done">已反馈</view>
+        </view>
+      </block>
+    </scroll-view>
+    <view class="composer">
+      <input
+        class="input"
+        value="{{draft}}"
+        maxlength="60"
+        confirm-type="send"
+        placeholder="问 AI 助手…（60字内）"
+        bindinput="onInput"
+        bindconfirm="onSend"
+        disabled="{{remaining <= 0}}"
+      />
+      <button class="send" loading="{{sending}}" disabled="{{sending || remaining <= 0}}" bindtap="onSend">发送</button>
+    </view>
+  </view>
+</view>
