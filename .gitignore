@@ -49,3 +49,7 @@ codeBase/scripts/*.local.*
 .trae/**/cache/
 .cursor/**/*.local.*
 .trae/**/*.local.*
+
+# Docs live in separate repo: https://github.com/dianfenzhan/football-sdd-doc
+# Local checkout is a symlink (or clone) at ./doc — do not commit it here.
+/doc
