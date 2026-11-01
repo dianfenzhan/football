@@ -50,6 +50,5 @@ codeBase/scripts/*.local.*
 .cursor/**/*.local.*
 .trae/**/*.local.*
 
-# Docs live in separate repo: https://github.com/dianfenzhan/football-sdd-doc
-# Local checkout is a symlink (or clone) at ./doc — do not commit it here.
-/doc
+# 产品文档（features.md / smoke-tests.md）在独立仓 football-sdd-doc
+# 本仓 doc/ 只放部署密钥、魔镜知识库与运营素材（密钥仍由上方规则忽略）

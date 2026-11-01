@@ -1,6 +1,6 @@
 # 球队小程序
 
-原生微信小程序 + 微信云开发。一期范围见 `doc/project/一期确认文档.md`。
+原生微信小程序 + 微信云开发。一期范围见 SDD 仓 `doc/project/一期确认文档.md`（工作区 `football-myself-sdd`）。
 
 AppID：`wxb8021a7ae0c71bd0`（周三快乐足球联队）  
 云环境：`cloudbase-d5g20kltv44b494f6`（已写入 `miniprogram/cloud-env.js`）
