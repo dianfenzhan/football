@@ -1,0 +1,9 @@
+<view class="bar">
+  <view
+    wx:for="{{options}}"
+    wx:key="id"
+    class="chip {{value === item.id ? 'on' : ''}}"
+    data-id="{{item.id}}"
+    bindtap="onPick"
+  >{{item.name}}</view>
+</view>

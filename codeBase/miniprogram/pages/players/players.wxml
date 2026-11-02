@@ -1,19 +1,24 @@
 <view class="page">
+  <club-nav bind:change="onFilterChange" />
+
   <view class="card">
-    <view class="pills">
+    <view class="pills" wx:if="{{groupFilters.length}}">
       <view
-        wx:for="{{teams}}"
-        wx:key="_id"
-        class="pill {{teamId === item._id ? 'active' : ''}}"
-        data-id="{{item._id}}"
-        bindtap="onTeam"
+        wx:for="{{groupFilters}}"
+        wx:key="id"
+        class="pill {{groupId === item.id ? 'active' : ''}}"
+        data-id="{{item.id}}"
+        bindtap="onGroup"
       >{{item.name}}</view>
     </view>
-    <view wx:if="{{isAdmin}}" class="muted admin-tip">管理员可点击任意队员修改昵称、头像和擅长位置</view>
+    <view class="muted admin-tip" wx:elif="{{canEditPlayers}}">管理员可点击队员修改昵称、头像和擅长位置。</view>
+    <view class="muted admin-tip" wx:else>当前筛选：{{clubFilterLabel}}</view>
   </view>
+
   <view class="card" wx:if="{{!loading && players.length === 0}}">
-    <view class="muted">该球队还没有队员</view>
+    <view class="muted">还没有队员</view>
   </view>
+
   <view
     class="card player-row"
     wx:for="{{players}}"
@@ -24,13 +29,28 @@
     <image wx:if="{{item.avatarUrl}}" class="avatar" src="{{item.avatarUrl}}" mode="aspectFill"/>
     <view wx:else class="avatar-fallback" style="background: {{item.avatarBg}};">{{item.avatarChar}}</view>
     <view class="player-info">
-      <text class="player-name">{{item.name}}</text>
-      <text wx:if="{{item.isCaptain}}" class="admin-tag">队长</text>
-      <text wx:elif="{{item.isAdmin}}" class="admin-tag">管理员</text>
+      <view class="name-line">
+        <text class="player-name">{{item.name}}</text>
+        <text wx:if="{{item.isCaptain}}" class="admin-tag">队长</text>
+        <text wx:elif="{{item.clubAdminTag}}" class="admin-tag">{{item.clubAdminTag}}</text>
+      </view>
+      <view class="muted sub" wx:if="{{item.metaText}}">{{item.metaText}}</view>
     </view>
-    <view class="player-right">
+    <view class="player-right" catchtap="noop">
       <text class="pos-badge">{{item.positionLabel}}</text>
-      <text wx:if="{{isAdmin}}" class="edit-hint">编辑 ›</text>
+      <view wx:if="{{canGrantThisClub && item.canToggleAdmin}}" class="admin-switch">
+        <text class="admin-switch-label">管理员</text>
+        <switch
+          checked="{{item.isClubAdmin}}"
+          disabled="{{grantingId === item._id}}"
+          data-id="{{item._id}}"
+          data-name="{{item.name}}"
+          data-on="{{item.isClubAdmin}}"
+          bindchange="onGrant"
+          color="#0f3d2e"
+        />
+      </view>
+      <text wx:elif="{{canEditPlayers}}" class="edit-hint">编辑 ›</text>
     </view>
   </view>
 
@@ -59,6 +79,13 @@
             bindtap="onEditPosition"
           >{{item.label}}</view>
         </view>
+      </view>
+      <view class="field grant-row" wx:if="{{canGrantThisClub && editCanToggleAdmin}}">
+        <view>
+          <text class="label">本队管理员</text>
+          <view class="muted grant-hint">打开后可建活动、记分；只对本队有效</view>
+        </view>
+        <switch checked="{{editIsClubAdmin}}" bindchange="onEditGrant" color="#0f3d2e" />
       </view>
       <view class="modal-actions">
         <button class="btn ghost modal-btn" disabled="{{savingPlayer}}" bindtap="closeEditModal">取消</button>

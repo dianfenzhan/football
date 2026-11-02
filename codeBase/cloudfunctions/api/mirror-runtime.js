@@ -14,7 +14,16 @@ const {
   recentStart
 } = require('./rules')
 const { fetchActivityWeather } = require('./weather')
+const { CLUB_WEDNESDAY, CLUB_JIELONG } = require('./clubs')
 const mirror = require('./mirror')
+
+function activityMatchesClub(activity, clubId) {
+  if (clubId === 'all') return true
+  if (clubId === CLUB_JIELONG) return activity.clubId === CLUB_JIELONG
+  if (clubId === CLUB_WEDNESDAY) return !activity.clubId || activity.clubId === CLUB_WEDNESDAY
+  // 旧调用不传 clubId：榜单仍只算周三联，避免界龙混进来
+  return activity.clubId !== CLUB_JIELONG
+}
 
 function postChat(baseUrl, apiKey, body, timeoutMs = 12000) {
   const url = new URL(String(baseUrl || '').replace(/\/$/, '') + '/chat/completions')
@@ -163,16 +172,19 @@ function createMirrorAsk(deps) {
     }
   }
 
-  async function loadBoardTotals(span, teamId, now = Date.now()) {
+  async function loadBoardTotals(span, teamId, now = Date.now(), clubId = '') {
     const start = recentStart(span, now)
     const teamFilter = TEAMS.some((team) => team._id === teamId) ? teamId : ''
     const homes = await homeTeams()
+    const activities = (await collect('activities', { startTime: _.gte(start) }))
+      .filter((activity) => activityMatchesClub(activity, clubId))
+    const activityIds = new Set(activities.map((activity) => activity._id))
     const contributions = withHomeTeam(
-      await collect('contributions', { activityStartTime: _.gte(start) }),
+      (await collect('contributions', { activityStartTime: _.gte(start) }))
+        .filter((row) => activityIds.has(row.activityId)),
       homes
     ).filter((row) => !teamFilter || row.teamId === teamFilter)
     const totals = totalsByPlayer(boardRows(contributions, now))
-    const activities = await collect('activities', { startTime: _.gte(start) })
     const startedIds = activities
       .filter((activity) => activity.startTime <= now)
       .map((activity) => activity._id)
@@ -191,7 +203,7 @@ function createMirrorAsk(deps) {
         teamFilter
       })
     }
-    return { totals, attendanceRows, span, teamId: teamFilter }
+    return { totals, attendanceRows, span, teamId: teamFilter, clubId: clubId || '' }
   }
 
   async function fetchCompact(openid, fetched, question) {

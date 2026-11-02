@@ -1,5 +1,6 @@
 const {
   call,
+  callQuiet,
   formatTime,
   teamName,
   sortTeamsByMine,
@@ -14,6 +15,13 @@ const {
   applyPitchDrag,
   renderTacticsPoster
 } = require('../../utils/tactics')
+const {
+  syncFilterFromActivity,
+  activityPageForClub,
+  joinedClubs,
+  normalizeClubs,
+  setMultiClubReady
+} = require('../../utils/club-context')
 
 /** 与球员页相同：这两个昵称是队长，报名名单里固定置顶。 */
 const CAPTAIN_NAMES = new Set(['jzy', '肉粽'])
@@ -150,10 +158,11 @@ Page({
   },
   onShareAppMessage() {
     const activity = this.data.activity
+    const page = activityPageForClub(activity && activity.clubId)
     if (!activity) {
       return {
         title: '周三快乐足球联队',
-        path: `/pages/activity/activity?id=${this.data.id}`
+        path: `/pages/${page}/${page}?id=${this.data.id}`
       }
     }
     const left = (this.data.quotas || []).reduce((sum, quota) => sum + Math.max(0, (quota.maxSignups || 0) - (quota.signed || 0)), 0)
@@ -166,11 +175,31 @@ Page({
     const gap = left > 0 ? `还差 ${left} 人，速来！` : (waitCount < cap ? '正选已满，可排后补' : '已满员，可先围观')
     return {
       title: `${activity.title}｜${when} ${activity.location}，${gap}`,
-      path: `/pages/activity/activity?id=${this.data.id}`
+      path: `/pages/${page}/${page}?id=${this.data.id}`
     }
+  },
+  syncClubFilter(activity) {
+    const clubId = (activity && activity.clubId) || 'club_wednesday'
+    callQuiet('orgMe').then((org) => {
+      setMultiClubReady(true)
+      const clubs = normalizeClubs((org && org.clubs) || [], null, null)
+      syncFilterFromActivity(clubId, clubs)
+    }).catch(() => {
+      callQuiet('me').then((me) => {
+        const clubs = normalizeClubs([], me.user, me.teams)
+        if (joinedClubs(clubs).some((club) => club._id === clubId) || clubId === 'club_wednesday') {
+          syncFilterFromActivity(clubId, clubs)
+        }
+      }).catch(() => {})
+    })
   },
   load() {
     call('activityDetail', { activityId: this.data.id }).then((res) => {
+      this.syncClubFilter(res.activity)
+      if (res.activity && res.activity.clubId === 'club_jielong') {
+        wx.redirectTo({ url: `/pages/session/session?id=${this.data.id}` })
+        return
+      }
       const me = res.me
       const myTeamId = (me && me.teamId) || 'team_jiong'
       const teams = sortTeamsByMine(res.teams || [], myTeamId)
@@ -853,17 +882,11 @@ Page({
       quotas: next.quotas,
       signups: next.signups
     })
-    wx.cloud.callFunction({
-      name: 'api',
-      data: {
-        action: 'swapSignups',
-        activityId: this.data.id,
-        openidA,
-        openidB
-      }
-    }).then((res) => {
-      const result = (res && res.result) || {}
-      if (!result.ok) throw new Error(result.message || '对调失败')
+    callQuiet('swapSignups', {
+      activityId: this.data.id,
+      openidA,
+      openidB
+    }).then(() => {
       this.load()
     }).catch(() => {
       this.setData(prev)
@@ -879,17 +902,11 @@ Page({
       signups: this.data.signups
     }
     this.setData(next)
-    wx.cloud.callFunction({
-      name: 'api',
-      data: {
-        action: 'moveSignup',
-        activityId: this.data.id,
-        teamId,
-        targetOpenid: openid
-      }
-    }).then((res) => {
-      const result = (res && res.result) || {}
-      if (!result.ok) throw new Error('换位失败')
+    callQuiet('moveSignup', {
+      activityId: this.data.id,
+      teamId,
+      targetOpenid: openid
+    }).then(() => {
       this.load()
     }).catch(() => {
       this.setData(prev)

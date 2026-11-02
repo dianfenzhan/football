@@ -1,18 +1,22 @@
 @import "../../app.wxss";
 
 .pills {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16rpx;
 }
 
 .pill {
-  flex: 1;
+  min-width: 0;
   text-align: center;
-  padding: 14rpx 0;
+  padding: 16rpx 12rpx;
   border-radius: 999rpx;
   background: #f4f6f5;
   color: #3d4944;
   font-size: 26rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pill.active {
@@ -35,9 +39,13 @@
 .player-info {
   flex: 1;
   min-width: 0;
+}
+
+.name-line {
   display: flex;
   align-items: center;
   gap: 12rpx;
+  min-width: 0;
 }
 
 .player-name {
@@ -45,6 +53,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sub {
+  margin-top: 4rpx;
+  font-size: 22rpx;
+}
+
+.grant-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8rpx;
 }
 
 .admin-tag {
@@ -60,6 +80,26 @@
   align-items: center;
   gap: 12rpx;
   flex-shrink: 0;
+}
+
+.admin-switch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rpx;
+  min-width: 96rpx;
+}
+
+.admin-switch-label {
+  font-size: 20rpx;
+  color: #0f3d2e;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.grant-hint {
+  margin-top: 4rpx;
+  font-size: 22rpx;
 }
 
 .pos-badge {

@@ -1,29 +1,28 @@
 <view class="page">
-  <view class="card">
-    <view class="muted" wx:if="{{canGrantAdmin}}">你是管理员，并且可以授权其他人成为管理员。被授权的人不能再授权。</view>
-    <view class="muted" wx:elif="{{isAdmin}}">你是管理员。</view>
-    <view class="reg-avatar-row">
+  <view class="profile">
+    <view class="profile-hero">
       <button class="avatar-chooser" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar">
         <image wx:if="{{avatarPreview && !avatarBroken}}" class="avatar-img" src="{{avatarPreview}}" mode="aspectFill" binderror="onAvatarError"/>
         <view wx:else class="avatar-fallback chooser-fallback" style="background: {{avatarBg}};">{{avatarChar}}</view>
+        <view class="avatar-badge">换</view>
       </button>
-      <view class="muted">点头像，同步微信头像</view>
+      <input
+        type="nickname"
+        class="name-input"
+        value="{{name}}"
+        bindinput="onName"
+        bindblur="onNameBlur"
+        bindconfirm="onNameBlur"
+        placeholder="填写昵称"
+        maxlength="20"
+      />
+      <view class="role-line" wx:if="{{roleHint}}">{{roleHint}}</view>
+      <view class="sync-line" wx:if="{{saving}}">正在同步…</view>
+      <view class="sync-line ok" wx:elif="{{justSaved}}">已同步</view>
     </view>
-    <view class="field">
-      <text class="label">昵称</text>
-      <input type="nickname" class="input" value="{{name}}" bindinput="onName" placeholder="怎么称呼你" />
-    </view>
-    <view class="reg-teams">
-      <view
-        wx:for="{{teams}}"
-        wx:key="_id"
-        class="reg-team {{teamId === item._id ? 'active' : ''}}"
-        data-id="{{item._id}}"
-        bindtap="onTeam"
-      >{{item.name}}</view>
-    </view>
-    <view class="field">
-      <text class="label">擅长位置</text>
+
+    <view class="pos-block">
+      <view class="pos-label">擅长位置</view>
       <view class="reg-positions">
         <view
           wx:for="{{positions}}"
@@ -34,20 +33,76 @@
         >{{item.label}}</view>
       </view>
     </view>
-    <button class="btn" loading="{{saving}}" disabled="{{saving}}" bindtap="save">保存</button>
   </view>
-  <view class="card" wx:if="{{canGrantAdmin}}">
-    <view class="title">授权管理员</view>
-    <view class="muted grant-hint">对方需要先在「我的」里保存姓名和球队，才会出现在这里。</view>
-    <view wx:if="{{members.length === 0}}" class="muted">还没有其他队员。</view>
-    <view wx:for="{{members}}" wx:key="_id" class="row member">
-      <view>
-        <view>{{item.name}}</view>
-        <view class="muted">{{item.teamName}}<text wx:if="{{item.canGrantAdmin}}"> · 授权人</text></view>
+
+  <view class="clubs">
+    <view class="club-title-row">
+      <view class="title">我的球队</view>
+    </view>
+    <view class="join-hint">请让管理员把活动分享给你</view>
+
+    <view wx:if="{{!clubs.length}}" class="empty-club">
+      <view class="empty-title">还没有球队</view>
+      <view class="muted">打开分享来的活动链接报名后，会自动加入对应球队</view>
+    </view>
+
+    <view wx:for="{{clubs}}" wx:key="_id" class="club-card">
+      <view class="club-head">
+        <view class="club-name">{{item.name}}</view>
+        <view class="badge">{{item.roleLabel}}</view>
       </view>
-      <switch checked="{{item.isAdmin}}" disabled="{{item.canGrantAdmin || grantingId === item._id}}" data-id="{{item._id}}" bindchange="onGrant" color="#0f3d2e" />
+
+      <block wx:if="{{item.hasGroups}}">
+        <view class="group-meta">
+          <text class="current-group">{{item._id === 'club_jielong' ? '名册分组' : '默认报名'}} · {{item.currentGroupName || '未选'}}</text>
+          <text
+            wx:if="{{item.canEditGroup}}"
+            class="edit-toggle"
+            data-club="{{item._id}}"
+            bindtap="toggleEditGroups"
+          >{{editingClubId === item._id ? '完成' : '改组名'}}</text>
+        </view>
+
+        <view wx:if="{{editingClubId === item._id && item.canEditGroup}}" class="group-edit-list">
+          <view
+            wx:for="{{item.groups}}"
+            wx:for-item="group"
+            wx:for-index="gIndex"
+            wx:key="id"
+            class="group-edit-row"
+          >
+            <view class="dot" style="background: {{group.color}};"></view>
+            <input
+              class="group-input"
+              value="{{group.name}}"
+              data-club="{{item._id}}"
+              data-index="{{gIndex}}"
+              bindinput="onGroupName"
+              bindblur="saveGroupName"
+            />
+          </view>
+        </view>
+
+        <view wx:else class="group-chips">
+          <view
+            wx:for="{{item.groups}}"
+            wx:for-item="group"
+            wx:key="id"
+            class="group-chip {{group.isCurrent ? 'on' : ''}}"
+            data-club="{{item._id}}"
+            data-id="{{group.id}}"
+            bindtap="onPickGroup"
+          >
+            <view class="dot" style="background: {{group.color}};"></view>
+            <text>{{group.name}}</text>
+          </view>
+        </view>
+      </block>
+
+      <view wx:else class="club-note">报名后由老板当场分队</view>
     </view>
   </view>
+
   <nav current="me" />
   <mirror />
 </view>

@@ -1,0 +1,116 @@
+.fixed {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 500;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  padding: 0 12rpx;
+  box-sizing: border-box;
+}
+
+.side {
+  width: 72rpx;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.side.left {
+  font-size: 48rpx;
+  color: #fff;
+  line-height: 1;
+  padding-left: 8rpx;
+}
+
+.title-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  padding: 8rpx 16rpx;
+}
+
+.title-wrap.locked {
+  gap: 0;
+}
+
+.title {
+  font-size: 34rpx;
+  font-weight: 700;
+  max-width: 360rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chev {
+  font-size: 22rpx;
+  opacity: 0.9;
+  margin-top: 4rpx;
+}
+
+.sheet { position: fixed; inset: 0; z-index: 1000; }
+.mask { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.4); }
+.body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #fff;
+  border-radius: 28rpx 28rpx 0 0;
+  padding: 28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
+}
+
+.sheet-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #0f3d2e;
+}
+
+.sheet-sub {
+  margin: 8rpx 0 20rpx;
+  color: #66706c;
+  font-size: 24rpx;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 24rpx 20rpx;
+  border-radius: 18rpx;
+  background: #f4f6f5;
+  margin-bottom: 12rpx;
+}
+
+.row.on { background: #e8efe9; }
+
+.row-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #0f3d2e;
+}
+
+.badge {
+  flex-shrink: 0;
+  background: #0f3d2e;
+  color: #fff;
+  font-size: 22rpx;
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
+}
+
+.cancel {
+  text-align: center;
+  padding: 24rpx 0 8rpx;
+  color: #66706c;
+  font-size: 28rpx;
+}

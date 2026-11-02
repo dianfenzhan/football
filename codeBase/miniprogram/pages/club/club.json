@@ -1,0 +1,7 @@
+{
+  "navigationStyle": "custom",
+  "usingComponents": {
+    "nav": "/components/nav/nav",
+    "club-nav": "/components/club-nav/club-nav"
+  }
+}

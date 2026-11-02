@@ -1,13 +1,21 @@
-.reg-avatar-row {
+.profile {
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 36rpx 28rpx 28rpx;
+  margin-bottom: 20rpx;
+}
+
+.profile-hero {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 20rpx;
-  margin: 20rpx 0;
+  text-align: center;
 }
 
 .avatar-chooser {
-  width: 96rpx;
-  height: 96rpx;
+  position: relative;
+  width: 128rpx;
+  height: 128rpx;
   border-radius: 50%;
   padding: 0;
   margin: 0;
@@ -15,53 +23,90 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  overflow: visible;
+}
+
+.avatar-chooser::after {
+  border: none;
 }
 
 .avatar-img {
-  width: 96rpx;
-  height: 96rpx;
+  width: 128rpx;
+  height: 128rpx;
   border-radius: 50%;
 }
 
 .chooser-fallback {
-  width: 96rpx;
-  height: 96rpx;
-  font-size: 40rpx;
+  width: 128rpx;
+  height: 128rpx;
+  font-size: 48rpx;
+  border-radius: 50%;
 }
 
-.reg-teams {
-  display: flex;
-  gap: 16rpx;
-  margin-bottom: 20rpx;
-}
-
-.reg-team {
-  flex: 1;
-  text-align: center;
-  padding: 18rpx 0;
-  border-radius: 12rpx;
-  background: #f4f6f5;
-  color: #3d4944;
-}
-
-.reg-team.active {
+.avatar-badge {
+  position: absolute;
+  right: -2rpx;
+  bottom: -2rpx;
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 50%;
   background: #0f3d2e;
   color: #fff;
-  font-weight: 600;
+  font-size: 20rpx;
+  line-height: 40rpx;
+  text-align: center;
+  border: 4rpx solid #fff;
+}
+
+.name-input {
+  margin-top: 20rpx;
+  width: 100%;
+  text-align: center;
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #0f3d2e;
+  padding: 8rpx 12rpx;
+}
+
+.role-line {
+  margin-top: 8rpx;
+  color: #6a7771;
+  font-size: 22rpx;
+}
+
+.sync-line {
+  margin-top: 8rpx;
+  min-height: 28rpx;
+  color: #8a9690;
+  font-size: 22rpx;
+}
+
+.sync-line.ok {
+  color: #1d6b50;
+}
+
+.pos-block {
+  margin-top: 28rpx;
+  padding-top: 24rpx;
+  border-top: 1rpx solid #eef2f0;
+}
+
+.pos-label {
+  color: #6a7771;
+  font-size: 24rpx;
+  margin-bottom: 12rpx;
 }
 
 .reg-positions {
   display: flex;
   gap: 12rpx;
-  margin-top: 10rpx;
 }
 
 .reg-pos {
   flex: 1;
   text-align: center;
-  padding: 16rpx 0;
-  border-radius: 12rpx;
+  padding: 18rpx 0;
+  border-radius: 999rpx;
   background: #f4f6f5;
   color: #3d4944;
   font-size: 26rpx;
@@ -73,11 +118,156 @@
   font-weight: 600;
 }
 
-.grant-hint {
-  margin: 12rpx 0 8rpx;
+.clubs {
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 28rpx 24rpx 16rpx;
 }
 
-.member {
-  padding: 16rpx 0;
-  border-top: 1rpx solid #e3e8e6;
+.club-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-bottom: 8rpx;
+}
+
+.join-hint {
+  margin: 0 0 16rpx;
+  color: #7a8f86;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.join-entry {
+  flex-shrink: 0;
+  color: #0f3d2e;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.empty-club {
+  padding: 40rpx 8rpx 24rpx;
+  text-align: center;
+}
+
+.empty-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #0f3d2e;
+  margin-bottom: 8rpx;
+}
+
+.club-card {
+  margin-top: 16rpx;
+  padding: 22rpx 20rpx 18rpx;
+  border-radius: 20rpx;
+  background: #f7f9f8;
+}
+
+.club-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.club-name {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #0f3d2e;
+}
+
+.badge {
+  background: #fff;
+  color: #0f3d2e;
+  font-size: 22rpx;
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
+}
+
+.group-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  margin-top: 12rpx;
+  margin-bottom: 12rpx;
+}
+
+.current-group {
+  color: #6a7771;
+  font-size: 24rpx;
+}
+
+.edit-toggle {
+  flex-shrink: 0;
+  color: #0f3d2e;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.group-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.group-chip {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  padding: 14rpx 18rpx;
+  border-radius: 999rpx;
+  background: #fff;
+  color: #1c2421;
+  font-size: 26rpx;
+}
+
+.group-chip.on {
+  background: #0f3d2e;
+  color: #fff;
+  font-weight: 600;
+}
+
+.dot {
+  width: 18rpx;
+  height: 18rpx;
+  border-radius: 50%;
+  border: 1rpx solid rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
+}
+
+.group-chip.on .dot {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.group-edit-list {
+  margin-top: 4rpx;
+}
+
+.group-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 8rpx 0;
+}
+
+.group-input {
+  flex: 1;
+  background: #fff;
+  border-radius: 12rpx;
+  padding: 14rpx 16rpx;
+}
+
+.club-note {
+  margin-top: 10rpx;
+  color: #6a7771;
+  font-size: 24rpx;
+}
+
+.btn.soft {
+  background: #e8efe9;
+  color: #0f3d2e;
+  margin-top: 20rpx;
 }

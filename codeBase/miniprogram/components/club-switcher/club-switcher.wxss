@@ -1,0 +1,138 @@
+.wrap { margin-bottom: 20rpx; }
+
+.switcher {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.switcher.compact {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 18rpx 22rpx;
+  box-shadow: 0 2rpx 10rpx rgba(15, 61, 46, 0.06);
+}
+
+.ball {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 50%;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 44rpx;
+  box-shadow: 0 4rpx 12rpx rgba(15, 61, 46, 0.12);
+  flex-shrink: 0;
+}
+
+.text { min-width: 0; flex: 1; }
+
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.name {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #0f3d2e;
+  max-width: 480rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact .name { font-size: 30rpx; }
+
+.chev {
+  color: #66706c;
+  font-size: 22rpx;
+  line-height: 1;
+  margin-top: 4rpx;
+}
+
+.sub {
+  margin-top: 4rpx;
+  color: #66706c;
+  font-size: 24rpx;
+}
+
+.hint {
+  margin-top: 14rpx;
+  background: #fff;
+  color: #0f3d2e;
+  border-radius: 999rpx;
+  padding: 10rpx 22rpx;
+  font-size: 24rpx;
+  display: inline-block;
+}
+
+.sheet { position: fixed; inset: 0; z-index: 1000; }
+.mask { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.4); }
+.body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #fff;
+  border-radius: 28rpx 28rpx 0 0;
+  padding: 28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
+}
+
+.sheet-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #0f3d2e;
+}
+
+.sheet-sub {
+  margin: 8rpx 0 20rpx;
+  color: #66706c;
+  font-size: 24rpx;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 24rpx 20rpx;
+  border-radius: 18rpx;
+  background: #f4f6f5;
+  margin-bottom: 12rpx;
+}
+
+.row.on { background: #e8efe9; }
+
+.row-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #0f3d2e;
+}
+
+.row-meta {
+  margin-top: 4rpx;
+  font-size: 22rpx;
+  color: #66706c;
+}
+
+.badge {
+  flex-shrink: 0;
+  background: #0f3d2e;
+  color: #fff;
+  font-size: 22rpx;
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
+}
+
+.manage,
+.cancel {
+  text-align: center;
+  padding: 24rpx 0 8rpx;
+  font-size: 28rpx;
+}
+
+.manage { color: #0f3d2e; font-weight: 600; }
+.cancel { color: #66706c; }

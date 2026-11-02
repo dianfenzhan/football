@@ -1,4 +1,4 @@
-const { call, sortTeamsByMine } = require('../../utils/api')
+const { call, callQuiet, sortTeamsByMine } = require('../../utils/api')
 
 function pad(n) {
   return n < 10 ? `0${n}` : `${n}`
@@ -27,23 +27,45 @@ Page({
       team_pudong: '11'
     },
     saving: false,
-    signupMode: 'split'
+    signupMode: 'split',
+    clubId: '',
+    maxSignedPlayers: '40'
   },
   onLoad() {
     const when = nextWednesdayAt20(new Date())
+    const clubId = wx.getStorageSync('currentClubId') || ''
     this.setData({
+      clubId,
       date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}`,
-      time: '20:00'
+      time: '20:00',
+      title: clubId === 'club_jielong' ? '界龙散客' : '养生球'
     })
-    call('me').then((res) => {
+    const profileCall = clubId === 'club_jielong' ? callQuiet('orgMe') : call('me')
+    profileCall.then((res) => {
+      if (clubId === 'club_jielong') {
+        const club = (res.clubs || []).find((item) => item._id === 'club_jielong')
+        const allowed = club && (club.role === 'admin' || club.role === 'owner')
+        if (!allowed) wx.showToast({ title: '只有管理员可以新建', icon: 'none' })
+        return
+      }
       if (!res.user || !res.user.isAdmin) {
         wx.showToast({ title: '只有管理员可以新建', icon: 'none' })
         return
       }
       const myTeamId = (res.user && res.user.teamId) || 'team_jiong'
       this.setData({ teams: sortTeamsByMine(res.teams || [], myTeamId) })
+    }).catch((err) => {
+      if (clubId !== 'club_jielong') return
+      const msg = (err && err.message) || ''
+      wx.showToast({
+        title: /未知操作|invalid action/i.test(msg)
+          ? '未走本地云函数，请开启 api 云函数本地调试'
+          : (msg || '加载失败'),
+        icon: 'none'
+      })
     })
   },
+  onMax(event) { this.setData({ maxSignedPlayers: event.detail.value }) },
   onMode(event) {
     const mode = event.currentTarget.dataset.mode
     if (mode !== 'split' && mode !== 'joint') return
@@ -63,6 +85,19 @@ Page({
     const [hour, minute] = this.data.time.split(':').map(Number)
     const [year, month, day] = this.data.date.split('-').map(Number)
     const startTime = new Date(year, month - 1, day, hour, minute).getTime()
+    if (this.data.clubId === 'club_jielong') {
+      this.setData({ saving: true })
+      call('createActivity', {
+        clubId: 'club_jielong',
+        title: this.data.title,
+        location: this.data.location,
+        startTime,
+        maxSignedPlayers: Number(this.data.maxSignedPlayers)
+      }).then((res) => {
+        wx.redirectTo({ url: `/pages/session/session?id=${res.activityId}` })
+      }).catch(() => this.setData({ saving: false }))
+      return
+    }
     const quotas = {}
     this.data.teams.forEach((team) => {
       quotas[team._id] = Number(this.data.quotas[team._id])

@@ -1,5 +1,29 @@
 <view class="page">
-  <view class="card">
+  <view class="card" wx:if="{{clubId === 'club_jielong'}}">
+    <view class="field">
+      <text class="label">标题</text>
+      <input class="input" value="{{title}}" bindinput="onTitle" />
+    </view>
+    <view class="field">
+      <text class="label">地点</text>
+      <input class="input" value="{{location}}" bindinput="onLocation" />
+    </view>
+    <view class="field">
+      <text class="label">日期</text>
+      <picker mode="date" value="{{date}}" bindchange="onDate"><view class="picker-value">{{date}}</view></picker>
+    </view>
+    <view class="field">
+      <text class="label">时间</text>
+      <picker mode="time" value="{{time}}" bindchange="onTime"><view class="picker-value">{{time}}</view></picker>
+    </view>
+    <view class="field">
+      <text class="label">报名上限</text>
+      <input class="input" type="number" value="{{maxSignedPlayers}}" bindinput="onMax" />
+    </view>
+    <view class="muted">球员先报名进名单，不用选队。人齐后你再分成 2～6 队，默认每队 8 人。</view>
+    <button class="btn" loading="{{saving}}" bindtap="submit">创建</button>
+  </view>
+  <view class="card" wx:else>
     <view class="field">
       <text class="label">报名方式（创建后不能改）</text>
       <view class="mode-row">

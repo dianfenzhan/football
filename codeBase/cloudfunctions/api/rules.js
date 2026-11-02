@@ -122,8 +122,9 @@ function assertNotAbsentWithStats(absent, goals, assists) {
 
 const FOUR_HOURS = 4 * 60 * 60 * 1000
 
-function willRecordPigeon(startTime, now, status) {
-  return status === 'signed' && startTime > now && startTime - now < FOUR_HOURS
+function willRecordPigeon(startTime, now, status, cutoffHours) {
+  const hours = cutoffHours == null ? 4 : Number(cutoffHours)
+  return status === 'signed' && startTime > now && startTime - now < hours * 60 * 60 * 1000
 }
 
 function assertPigeonEditable(row) {

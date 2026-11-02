@@ -1,0 +1,21 @@
+.bar {
+  display: flex;
+  gap: 12rpx;
+  margin-bottom: 20rpx;
+  flex-wrap: wrap;
+}
+
+.chip {
+  padding: 12rpx 24rpx;
+  border-radius: 999rpx;
+  background: #fff;
+  color: #334039;
+  font-size: 24rpx;
+  box-shadow: 0 2rpx 8rpx rgba(15, 61, 46, 0.06);
+}
+
+.chip.on {
+  background: #0f3d2e;
+  color: #fff;
+  font-weight: 600;
+}

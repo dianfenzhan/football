@@ -1,0 +1,18 @@
+.tip { margin-bottom: 16rpx; }
+.title-row { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; }
+.badge {
+  background: #e8efe9;
+  color: #0f3d2e;
+  font-size: 22rpx;
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
+}
+.group { display: flex; align-items: center; gap: 12rpx; margin-top: 16rpx; }
+.dot { width: 28rpx; height: 28rpx; border-radius: 50%; border: 1rpx solid #ddd; }
+.group-name { flex: 1; }
+.group-name.on { color: #0f3d2e; font-weight: 600; }
+.input { flex: 1; background: #f4f6f5; border-radius: 8rpx; padding: 8rpx 12rpx; }
+.order { display: flex; gap: 16rpx; color: #0f3d2e; }
+.colors { display: flex; gap: 12rpx; margin: 8rpx 0 8rpx 40rpx; }
+.joined { margin-top: 16rpx; color: #0f3d2e; font-weight: 600; }
+.btn { background: #0f3d2e; color: #fff; border-radius: 12rpx; margin-top: 20rpx; }

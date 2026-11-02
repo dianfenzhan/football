@@ -1,3 +1,10 @@
+.club-empty {
+  margin-top: 80rpx;
+  text-align: center;
+  color: #66706c;
+  font-size: 28rpx;
+}
+
 .segment {
   display: flex;
   gap: 8rpx;

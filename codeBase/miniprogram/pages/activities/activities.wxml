@@ -1,4 +1,5 @@
 <view class="page">
+  <club-nav bind:change="onFilterChange" />
   <view wx:if="{{loading}}" class="muted">加载中</view>
   <view wx:elif="{{activities.length === 0}}" class="card muted">还没有活动。管理员可以新建一场，再把页面转发到两个群。</view>
   <view class="swipe" wx:for="{{activities}}" wx:key="_id">
@@ -13,7 +14,7 @@
       bindtouchend="onTouchEnd"
       bindtap="open"
     >
-      <view class="title">{{item.title}}</view>
+      <view class="title">{{item.title}}<text wx:if="{{item.clubLabel}}" class="club-tag"> · {{item.clubLabel}}</text></view>
       <view class="muted">{{item.timeText}} · {{item.location}}</view>
       <view class="muted">{{item.quotaText}}</view>
     </view>

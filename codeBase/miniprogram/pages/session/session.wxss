@@ -1,0 +1,127 @@
+.page { padding: 24rpx 24rpx 80rpx; }
+.hero {
+  background: linear-gradient(165deg, #123f30 0%, #1f6a4f 100%);
+  color: #fff;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  margin-bottom: 20rpx;
+}
+.hero-title { font-size: 40rpx; font-weight: 700; }
+.hero-meta, .hero-count { margin-top: 8rpx; opacity: 0.9; font-size: 24rpx; }
+.card {
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 24rpx;
+  margin-bottom: 16rpx;
+}
+.action-tip, .muted, .tiny { color: #66706c; font-size: 24rpx; }
+.roster-label {
+  margin-top: 16rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #0f3d2e;
+}
+.roster-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 12rpx;
+}
+.roster-chip {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 10rpx 16rpx;
+  border-radius: 999rpx;
+  background: #f2f5f3;
+  font-size: 24rpx;
+  color: #33443d;
+}
+.roster-chip.on {
+  background: #0f3d2e;
+  color: #fff;
+}
+.roster-chip .dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  border: 1rpx solid rgba(0, 0, 0, 0.08);
+}
+.mine { font-size: 32rpx; font-weight: 600; color: #0f3d2e; }
+.links { margin-top: 12rpx; }
+.link { color: #0f3d2e; margin-right: 24rpx; }
+.btn {
+  background: #0f3d2e;
+  color: #fff;
+  border-radius: 14rpx;
+  margin-top: 16rpx;
+}
+.btn.soft { background: #e8efe9; color: #0f3d2e; }
+.section-title { font-size: 30rpx; font-weight: 600; margin-bottom: 12rpx; }
+.pair { display: flex; gap: 16rpx; }
+.name {
+  flex: 1;
+  min-height: 64rpx;
+  padding: 12rpx 8rpx;
+  border-bottom: 1rpx solid #eef2f0;
+}
+.name.on, .member.on { background: #e8efe9; border-radius: 8rpx; }
+.empty { color: #66706c; padding: 24rpx 0; }
+.team-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-bottom: 16rpx;
+}
+.team-card {
+  width: calc(50% - 8rpx);
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 20rpx;
+  box-sizing: border-box;
+}
+.team-head { display: flex; align-items: center; gap: 10rpx; margin-bottom: 8rpx; }
+.dot { width: 20rpx; height: 20rpx; border-radius: 50%; border: 1rpx solid #ddd; flex-shrink: 0; }
+.team-name { font-weight: 600; flex: 1; }
+.member {
+  padding: 10rpx 0;
+  border-bottom: 1rpx solid #f2f4f3;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8rpx;
+}
+.goal-actions { display: flex; gap: 12rpx; flex-shrink: 0; }
+.table-head, .table-row {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 10rpx 0;
+  border-bottom: 1rpx solid #f0f2f1;
+  font-size: 26rpx;
+}
+.table-head { color: #66706c; font-weight: 600; }
+.col-name { flex: 1; display: flex; align-items: center; gap: 10rpx; min-width: 0; }
+.col { width: 72rpx; text-align: right; }
+.match { margin-top: 16rpx; padding-top: 12rpx; border-top: 1rpx solid #f0f2f1; }
+.match-title { font-weight: 600; margin-bottom: 4rpx; }
+.score-row { display: flex; align-items: center; gap: 12rpx; margin-top: 8rpx; }
+.score { width: 90rpx; background: #f4f6f5; border-radius: 8rpx; padding: 8rpx; }
+.goal { padding: 8rpx 0; color: #334039; }
+.sheet { position: fixed; inset: 0; z-index: 20; }
+.sheet-mask { position: absolute; inset: 0; background: rgba(0,0,0,0.35); }
+.sheet-body {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  background: #fff;
+  border-radius: 28rpx 28rpx 0 0;
+  padding: 32rpx 28rpx 48rpx;
+}
+.chips { display: flex; flex-wrap: wrap; gap: 12rpx; margin: 12rpx 0 20rpx; }
+.chip {
+  padding: 12rpx 24rpx;
+  border-radius: 999rpx;
+  background: #f4f6f5;
+  color: #334039;
+}
+.chip.on { background: #0f3d2e; color: #fff; }

@@ -1,0 +1,36 @@
+<view class="root">
+  <view class="fixed" style="padding-top: {{statusBarHeight}}px; background: {{bg}};">
+    <view class="bar" style="height: {{navBarHeight}}px;">
+      <view wx:if="{{showBack}}" class="side left" bindtap="onBack">‹</view>
+      <view wx:else class="side left"></view>
+      <view wx:if="{{canSwitch}}" class="title-wrap" bindtap="openSheet">
+        <text class="title" style="color: {{color}};">{{title}}</text>
+        <text class="chev" style="color: {{color}};">▾</text>
+      </view>
+      <view wx:else class="title-wrap locked">
+        <text class="title" style="color: {{color}};">{{title}}</text>
+      </view>
+      <view class="side right" style="width: {{capsuleGap}}px;"></view>
+    </view>
+  </view>
+  <view class="spacer" style="height: {{totalHeight}}px;"></view>
+
+  <view class="sheet" wx:if="{{showSheet}}" catchtouchmove="noop">
+    <view class="mask" bindtap="closeSheet"></view>
+    <view class="body">
+      <view class="sheet-title">切换球队</view>
+      <view class="sheet-sub">只显示你已加入的球队</view>
+      <view
+        wx:for="{{options}}"
+        wx:key="id"
+        class="row {{value === item.id ? 'on' : ''}}"
+        data-id="{{item.id}}"
+        bindtap="onPick"
+      >
+        <view class="row-name">{{item.name}}</view>
+        <text class="badge" wx:if="{{value === item.id}}">当前</text>
+      </view>
+      <view class="cancel" bindtap="closeSheet">取消</view>
+    </view>
+  </view>
+</view>

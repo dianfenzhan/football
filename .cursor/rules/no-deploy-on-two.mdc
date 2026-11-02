@@ -1,0 +1,29 @@
+---
+description: two 分支禁止部署云函数
+alwaysApply: true
+---
+
+# two 分支：禁止部署云函数
+
+## 开关（仅用户可改）
+
+```
+allowDeployOnTwo: false
+```
+
+- Agent MUST NOT 自行把该值改成 `true`，也 MUST NOT 建议/代改此参数
+- 只有用户**亲手**把上面改成 `allowDeployOnTwo: true`，**并且**当面说「可以部署」后，才允许在 `two` 上部署
+- 仅口头说「部署一下 / 可以部署」而参数仍为 `false` → MUST 拒绝
+- 参数已是 `true` 但用户未说「可以部署」→ MUST 拒绝
+- 部署完成后，提醒用户把参数改回 `false`；Agent 仍不得代改
+
+## 禁令
+
+当前 git 分支为 `two`（`git branch --show-current` 为 `two`，或用户明确说在 `two` 上），且未满足上方双条件时：
+
+- MUST NOT 部署 / 上传云函数到云端
+- 包括：`npm run deploy:cloud`、`node scripts/deploy-cloud.js`（含 `--function-only`）、微信开发者工具 CLI `cloud functions deploy`、开发者工具「上传并部署」、冒烟流程里的部署步骤
+- 拒绝时说明：`two` 需你手动把 `allowDeployOnTwo` 改为 `true` 并明确说可以部署
+- `/smoke-test` 在 `two` 上若需要部署才能跑：跳过部署并说明原因，不要擅自上传
+
+切到非 `two` 分支后，本禁令失效，按既有部署约定执行（与该开关无关）。

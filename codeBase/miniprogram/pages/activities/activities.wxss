@@ -46,3 +46,9 @@
 .swipe-card.dragging {
   transition: none;
 }
+
+.club-tag {
+  font-weight: 400;
+  color: #66706c;
+  font-size: 24rpx;
+}

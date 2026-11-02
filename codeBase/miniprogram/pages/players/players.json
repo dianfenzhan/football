@@ -1,6 +1,7 @@
 {
   "usingComponents": {
-    "nav": "/components/nav/nav"
+    "nav": "/components/nav/nav",
+    "club-nav": "/components/club-nav/club-nav"
   },
-  "navigationBarTitleText": "球员"
+  "navigationStyle": "custom"
 }

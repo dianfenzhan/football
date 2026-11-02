@@ -31,7 +31,10 @@ alwaysApply: true
 - 改功能后 MUST 跑 `/doc-anchored`，让 `doc/features.md`、`doc/smoke-tests.md` 与代码一致
 - 云函数新增接口 MUST 在 `codeBase/scripts/smoke-test.js` 加一条检查
 - 密钥只在 `doc/project/secrets.local.json`、`private.*.key`（已 gitignore），MUST NOT 进代码或文档
+- **云函数调用默认**：开发/联调 MUST 走本地 `cloudfunctions/api`（开发者工具「云函数本地调试」）。本地调试只能在开发者工具里手动开（从项目列表打开项目 → 右键 api → 开启云函数本地调试，调试窗口保持打开）；Agent MUST NOT 为此跑 `cli open` / `cli auto`，它们会关掉调试窗口、请求回落云端。`npm run local:api` 只读检查是否走本地。Agent 日常改功能、冒烟、自测默认按本地函数；**仅当用户本轮明确说「测线上 / 打云端 / 用远程云函数」时**才取消本地调试、走已部署云函数。注意：本地函数仍连同一云库 `cloudbase-d5g20kltv44b494f6`，只是不跑线上旧代码、也不必为此部署。
 
 ## 例
 
 - 加一个报名接口 → 直接实现；实现后加 smoke 检查项，再 `/doc-anchored`；`/smoke-test` 仅用户明确要求时跑。
+- 「帮我本地验一下报名」→ 先 `npm run local:api` 检查本地调试是否在跑，没在跑就请用户手动开启，再测。
+- 「用线上云函数打一下 me」→ 才关本地调试 / 走远程。

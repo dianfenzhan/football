@@ -1,50 +1,56 @@
 <view class="page">
-  <view class="segment">
-    <view
-      wx:for="{{spans}}"
-      wx:key="id"
-      class="segment-item {{span === item.id ? 'on' : ''}}"
-      data-span="{{item.id}}"
-      bindtap="onSpan"
-    >{{item.name}}</view>
-  </view>
-
-  <view class="segment" wx:if="{{teamFilters.length}}">
-    <view
-      wx:for="{{teamFilters}}"
-      wx:key="id"
-      class="segment-item {{(teamId || 'all') === item.id ? 'on' : ''}}"
-      data-id="{{item.id}}"
-      bindtap="onTeam"
-    >{{item.name}}</view>
-  </view>
-
-  <view class="board">
-    <view class="tabs">
+  <club-nav bind:change="onFilterChange" />
+  <block wx:if="{{noClub}}">
+    <view class="empty club-empty">还没有加入球队，暂无数据</view>
+  </block>
+  <block wx:else>
+    <view class="segment">
       <view
-        wx:for="{{boards}}"
+        wx:for="{{spans}}"
         wx:key="id"
-        class="tab {{boardId === item.id ? 'on' : ''}}"
-        data-id="{{item.id}}"
-        bindtap="onBoard"
+        class="segment-item {{span === item.id ? 'on' : ''}}"
+        data-span="{{item.id}}"
+        bindtap="onSpan"
       >{{item.name}}</view>
     </view>
-    <view class="board-head">
-      <text class="board-title">{{board.name}}榜</text>
-      <text class="board-note">前 10</text>
+
+    <view class="segment" wx:if="{{teamFilters.length}}">
+      <view
+        wx:for="{{teamFilters}}"
+        wx:key="id"
+        class="segment-item {{(teamId || 'all') === item.id ? 'on' : ''}}"
+        data-id="{{item.id}}"
+        bindtap="onTeam"
+      >{{item.name}}</view>
     </view>
-    <view wx:if="{{list.length === 0}}" class="empty">{{board.empty}}</view>
-    <view wx:for="{{list}}" wx:key="playerOpenid" class="rank">
-      <view class="badge {{board.miss ? 'badge-miss' : ''}} badge-{{item.rank}}">{{item.rank}}</view>
-      <image wx:if="{{item.avatarUrl}}" class="avatar" src="{{item.avatarUrl}}" mode="aspectFill"/>
-      <view wx:else class="avatar-fallback" style="background: {{item.avatarBg}};">{{item.avatarChar}}</view>
-      <view class="who">
-        <view class="name">{{item.userName}}</view>
-        <view class="team">{{item.teamName}}</view>
+
+    <view class="board">
+      <view class="tabs">
+        <view
+          wx:for="{{boards}}"
+          wx:key="id"
+          class="tab {{boardId === item.id ? 'on' : ''}}"
+          data-id="{{item.id}}"
+          bindtap="onBoard"
+        >{{item.name}}</view>
       </view>
-      <view class="value {{board.miss ? 'value-miss' : ''}}">{{item.value}}</view>
+      <view class="board-head">
+        <text class="board-title">{{board.name}}榜</text>
+        <text class="board-note">前 10</text>
+      </view>
+      <view wx:if="{{list.length === 0}}" class="empty">{{board.empty}}</view>
+      <view wx:for="{{list}}" wx:key="playerOpenid" class="rank">
+        <view class="badge {{board.miss ? 'badge-miss' : ''}} badge-{{item.rank}}">{{item.rank}}</view>
+        <image wx:if="{{item.avatarUrl}}" class="avatar" src="{{item.avatarUrl}}" mode="aspectFill"/>
+        <view wx:else class="avatar-fallback" style="background: {{item.avatarBg}};">{{item.avatarChar}}</view>
+        <view class="who">
+          <view class="name">{{item.userName}}</view>
+          <view class="team">{{item.teamName}}</view>
+        </view>
+        <view class="value {{board.miss ? 'value-miss' : ''}}">{{item.value}}</view>
+      </view>
     </view>
-  </view>
+  </block>
 
   <nav current="stats" />
   <mirror />

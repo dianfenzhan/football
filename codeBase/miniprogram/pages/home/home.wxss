@@ -16,7 +16,7 @@
   display: flex;
   align-items: center;
   gap: 20rpx;
-  margin-bottom: 28rpx;
+  margin-bottom: 20rpx;
 }
 
 .brand-ball {
@@ -38,9 +38,8 @@
 }
 
 .brand-sub {
-  margin-top: 4rpx;
-  font-size: 22rpx;
   color: #66706c;
+  font-size: 24rpx;
 }
 
 .next-block {
@@ -132,6 +131,21 @@
   border-radius: 14rpx;
   line-height: 2.6;
   font-size: 30rpx;
+}
+
+.other-hint {
+  margin-top: 16rpx;
+  padding: 16rpx 8rpx 4rpx;
+  color: #3d6b58;
+  font-size: 26rpx;
+  text-align: center;
+}
+
+.other-hint.lone {
+  margin: 0 0 20rpx;
+  padding: 20rpx;
+  background: #edf5f0;
+  border-radius: 16rpx;
 }
 
 .btn.hero-cta {

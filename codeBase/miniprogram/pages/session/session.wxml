@@ -1,0 +1,187 @@
+<view class="page" wx:if="{{activity}}">
+  <view class="hero">
+    <view class="hero-title">{{activity.title}}</view>
+    <view class="hero-meta">{{timeText}}</view>
+    <view class="hero-meta">{{activity.location}}</view>
+    <view class="hero-count">已报名 {{signedCount}} / {{activity.maxSignedPlayers || 40}}</view>
+  </view>
+
+  <view class="card action" wx:if="{{!started}}">
+    <block wx:if="{{!mineStatus}}">
+      <view class="action-tip">本场不用选队，人齐了老板再分。请先确认你的名册分组（必选，默认散客⚽️）。</view>
+      <view class="roster-label">名册分组</view>
+      <view class="roster-chips">
+        <view
+          wx:for="{{rosterGroups}}"
+          wx:key="id"
+          class="roster-chip {{pickGroupId === item.id ? 'on' : ''}}"
+          data-id="{{item.id}}"
+          bindtap="onPickRoster"
+        >
+          <view class="dot" style="background: {{item.color}};"></view>
+          <text>{{item.name}}</text>
+        </view>
+      </view>
+      <button class="btn" bindtap="signup">报名</button>
+    </block>
+    <block wx:else>
+      <view class="mine">{{mineStatus}}</view>
+      <view class="links">
+        <text class="link" bindtap="cancel">取消报名</text>
+      </view>
+    </block>
+  </view>
+
+  <view class="card" wx:if="{{isAdmin && !locked}}">
+    <button class="btn soft" bindtap="openDivide">{{divided ? '重新分队' : '分成若干队'}}</button>
+    <view class="muted" wx:if="{{!divided}}">建议人到齐再分。默认每队 8 人，可改成 7 或 9。</view>
+  </view>
+  <view class="card muted" wx:if="{{locked}}">已有比分或进球，队伍锁定。</view>
+
+  <view class="card" wx:if="{{!divided}}">
+    <view class="section-title">已报名 {{signedCount}} 人</view>
+    <view wx:if="{{!poolRows.length}}" class="empty">还没有人报名</view>
+    <view wx:for="{{poolRows}}" wx:key="left._id" class="pair">
+      <view class="name">{{item.left.userName}}</view>
+      <view class="name">{{item.right ? item.right.userName : ''}}</view>
+    </view>
+  </view>
+
+  <block wx:else>
+    <view class="team-grid">
+      <view
+        wx:for="{{teamCards}}"
+        wx:key="id"
+        class="team-card"
+        data-id="{{item.id}}"
+        bindtap="moveToTeam"
+      >
+        <view class="team-head">
+          <view class="dot" style="background: {{item.color}};"></view>
+          <text class="team-name">{{item.name}} {{item.count}}</text>
+          <text wx:if="{{isAdmin}}" class="tiny" data-id="{{item.id}}" catchtap="editTeam">改名</text>
+        </view>
+        <view
+          wx:for="{{item.members}}"
+          wx:for-item="player"
+          wx:key="_id"
+          class="member {{selectedOpenid === player._openid ? 'on' : ''}}"
+          data-openid="{{player._openid}}"
+          data-name="{{player.userName}}"
+          catchtap="selectPlayer"
+        >
+          {{player.userName}}
+          <view wx:if="{{isAdmin}}" class="goal-actions">
+            <text class="tiny" data-openid="{{player._openid}}" catchtap="addGoal">进球</text>
+            <text class="tiny" data-openid="{{player._openid}}" data-own="1" catchtap="addGoal">乌龙</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card" wx:if="{{pendingCount}}">
+      <view class="section-title">未分队 {{pendingCount}}</view>
+      <view wx:for="{{poolRows}}" wx:key="left._id" class="pair">
+        <view
+          class="name {{selectedOpenid === item.left._openid ? 'on' : ''}}"
+          data-openid="{{item.left._openid}}"
+          data-name="{{item.left.userName}}"
+          bindtap="selectPlayer"
+        >{{item.left.userName}}</view>
+        <view
+          wx:if="{{item.right}}"
+          class="name {{selectedOpenid === item.right._openid ? 'on' : ''}}"
+          data-openid="{{item.right._openid}}"
+          data-name="{{item.right.userName}}"
+          bindtap="selectPlayer"
+        >{{item.right.userName}}</view>
+        <view wx:else class="name"></view>
+      </view>
+      <view class="muted" wx:if="{{isAdmin && selectedOpenid}}">已选 {{selectedName}}，再点上面的队名放进去</view>
+    </view>
+  </block>
+
+  <view class="card" wx:if="{{waitlistCount}}">
+    <view class="section-title">后补 {{waitlistCount}}</view>
+    <view wx:for="{{waitlistRows}}" wx:key="left._id" class="pair">
+      <view class="name muted">{{item.left.userName}}</view>
+      <view class="name muted">{{item.right ? item.right.userName : ''}}</view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{standings.length && rounds.length}}">
+    <view class="section-title">积分榜</view>
+    <view class="table-head">
+      <text class="col-name">队</text>
+      <text class="col">分</text>
+      <text class="col">净</text>
+      <text class="col">进</text>
+    </view>
+    <view wx:for="{{standings}}" wx:key="id" class="table-row">
+      <view class="col-name">
+        <view class="dot" style="background: {{item.color}};"></view>
+        <text>{{item.name}}</text>
+      </view>
+      <text class="col">{{item.pts}}</text>
+      <text class="col">{{item.gd}}</text>
+      <text class="col">{{item.gf}}</text>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{rounds.length}}">
+    <view class="section-title">对战场次</view>
+    <view wx:for="{{rounds}}" wx:key="_id" class="match">
+      <view class="match-title">
+        第{{item.roundNo}}轮 · {{item.pitchId === 'pitch_1' ? '1号场' : '2号场'}}
+        <text wx:if="{{item.typeLabel}}"> · {{item.typeLabel}}</text>
+      </view>
+      <view>{{item.left}} vs {{item.right}}</view>
+      <view class="muted">{{item.scoreText}}</view>
+      <view wx:if="{{isAdmin && item.scoreA == null}}" class="score-row">
+        <input class="score" type="number" data-id="{{item._id}}" data-side="a" bindinput="onScoreInput" placeholder="0" />
+        <text>:</text>
+        <input class="score" type="number" data-id="{{item._id}}" data-side="b" bindinput="onScoreInput" placeholder="0" />
+        <text class="link" data-id="{{item._id}}" bindtap="saveScore">记分</text>
+        <text class="link" data-round="{{item.roundNo}}" bindtap="swapPitch">换场</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{goalEvents.length}}">
+    <view class="section-title">进球</view>
+    <view wx:for="{{goalEvents}}" wx:key="_id" class="goal">
+      {{item.isOwnGoal ? '乌龙' : '进球'}} {{item.scorerName}}
+      <text wx:if="{{item.assistName}}"> · 助攻 {{item.assistName}}</text>
+    </view>
+  </view>
+
+  <view class="sheet" wx:if="{{showDivide}}">
+    <view class="sheet-mask" bindtap="closeDivide"></view>
+    <view class="sheet-body">
+      <view class="section-title">分成几队？</view>
+      <view class="chips">
+        <view
+          wx:for="{{teamCountOptions}}"
+          wx:key="*this"
+          class="chip {{pickTeamCount === item ? 'on' : ''}}"
+          data-value="{{item}}"
+          bindtap="onPickCount"
+        >{{item}} 队</view>
+      </view>
+      <view class="section-title">每队大概几人？</view>
+      <view class="chips">
+        <view
+          wx:for="{{sizeOptions}}"
+          wx:key="*this"
+          class="chip {{pickSize === item ? 'on' : ''}}"
+          data-value="{{item}}"
+          bindtap="onPickSize"
+        >{{item}} 人</view>
+      </view>
+      <view class="muted">{{divideHint}}</view>
+      <view class="muted" wx:if="{{pickTeamCount >= 4}}">分成 4、5、6 队会自动生成对战场次。</view>
+      <button class="btn" bindtap="confirmDivide">确认分队</button>
+      <button class="btn soft" bindtap="closeDivide">取消</button>
+    </view>
+  </view>
+</view>

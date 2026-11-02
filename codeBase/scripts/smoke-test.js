@@ -867,6 +867,54 @@ async function main() {
     assertFail('activityDetail after delete', await callApi(miniProgram, 'activityDetail', { activityId }))
     activityId = ''
 
+    const orgProfile = assertOk('orgMe', await callApi(miniProgram, 'orgMe'))
+    const jielong = (orgProfile.clubs || []).find((club) => club._id === 'club_jielong')
+    const wednesday = (orgProfile.clubs || []).find((club) => club._id === 'club_wednesday')
+    if (!jielong || !wednesday) throw new Error('orgMe: missing club')
+    if ((jielong.groups || []).length !== 0) throw new Error('orgMe: jielong should have no standing groups')
+    if ((jielong.signupModes || []).indexOf('pool') === -1) throw new Error('orgMe: jielong pool mode')
+    pass('orgMe two clubs')
+    if (jielong.role === 'owner' || jielong.role === 'admin') {
+      const created = assertOk('createActivity jielong', await callApi(miniProgram, 'createActivity', {
+        clubId: 'club_jielong',
+        title: '冒烟界龙',
+        location: '界龙足球基地',
+        startTime: Date.now() + 7 * 24 * HOUR_MS,
+        maxSignedPlayers: 40
+      }))
+      track(activityIds, created.activityId)
+      const signed = assertOk('signup jielong', await callApi(miniProgram, 'signup', {
+        activityId: created.activityId
+      }))
+      if (!signed.signed || signed.teamId !== 'team_pending') throw new Error('signup jielong: expected pending pool')
+      pass('signup jielong placed')
+      assertOk('smokeSeedSignups jielong', await callApi(miniProgram, 'smokeSeedSignups', {
+        activityId: created.activityId,
+        teamId: 'team_pending',
+        status: 'signed',
+        count: 30
+      }))
+      const divided = assertOk('assignTeams', await callApi(miniProgram, 'assignTeams', {
+        activityId: created.activityId,
+        teamCount: 4,
+        targetPerTeam: 8
+      }))
+      // 本人 + 30 假人 = 31，按每队 8 尽量匀成 8/8/8/7
+      if (divided.assignedCount !== 31) throw new Error('assignTeams: expected 31 assigned, got ' + divided.assignedCount)
+      if (divided.fixtureCount !== 6) throw new Error('assignTeams: expected 6 fixtures, got ' + divided.fixtureCount)
+      pass('assignTeams four by eight')
+      const detail = assertOk('activityDetail jielong', await callApi(miniProgram, 'activityDetail', {
+        activityId: created.activityId
+      }))
+      if (!detail.activity || !detail.activity.divided) throw new Error('activityDetail jielong: not divided')
+      if ((detail.rounds || []).length !== 6) throw new Error('activityDetail jielong: rounds')
+      pass('activityDetail divided')
+      assertDelete('deleteActivity jielong', await callApi(miniProgram, 'deleteActivity', {
+        activityId: created.activityId
+      }))
+      activityIds.pop()
+    }
+
     console.log('ALL CHECKS PASSED')
   } finally {
     await cleanupActivities(miniProgram, activityIds)

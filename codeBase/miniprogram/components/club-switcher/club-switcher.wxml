@@ -1,0 +1,37 @@
+<view class="wrap">
+  <view class="switcher {{compact ? 'compact' : ''}}" bindtap="openSheet">
+    <view class="ball" wx:if="{{!compact}}">⚽️</view>
+    <view class="text">
+      <view class="name-row">
+        <text class="name">{{currentName || '选择球队'}}</text>
+        <text class="chev" wx:if="{{clubs.length > 1}}">▾</text>
+      </view>
+      <view class="sub" wx:if="{{subtitle}}">{{subtitle}}</view>
+    </view>
+  </view>
+
+  <view class="hint" wx:if="{{otherHint}}" bindtap="onOther">{{otherHint}} →</view>
+
+  <view class="sheet" wx:if="{{showSheet}}" catchtouchmove="noop">
+    <view class="mask" bindtap="closeSheet"></view>
+    <view class="body">
+      <view class="sheet-title">切换球队</view>
+      <view class="sheet-sub">首页、活动、数据都会跟着当前球队走</view>
+      <view
+        wx:for="{{clubs}}"
+        wx:key="_id"
+        class="row {{currentClubId === item._id ? 'on' : ''}}"
+        data-id="{{item._id}}"
+        bindtap="onPick"
+      >
+        <view class="row-main">
+          <view class="row-name">{{item.name}}</view>
+          <view class="row-meta">{{item.meta || (item._id === 'club_jielong' ? '散客局 · 当场分队' : '常驻分组 · 分队/联合')}}</view>
+        </view>
+        <text class="badge" wx:if="{{currentClubId === item._id}}">当前</text>
+      </view>
+      <view class="manage" bindtap="onManage">管理球队与分组</view>
+      <view class="cancel" bindtap="closeSheet">取消</view>
+    </view>
+  </view>
+</view>

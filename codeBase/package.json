@@ -5,8 +5,10 @@
   "description": "周三快乐足球联队小程序",
   "scripts": {
     "deploy:cloud": "node scripts/deploy-cloud.js",
-    "test": "node --test test/rules.test.js test/mirror.test.js",
-    "smoke": "node scripts/smoke-test.js"
+    "test": "node --test test/rules.test.js test/mirror.test.js test/clubs.test.js",
+    "smoke": "node scripts/smoke-test.js",
+    "self-check": "node scripts/self-check-multi-club.js",
+    "local:api": "node scripts/ensure-local-api.js"
   },
   "devDependencies": {
     "miniprogram-automator": "^0.12.1",

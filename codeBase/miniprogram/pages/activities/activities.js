@@ -1,4 +1,16 @@
-const { call, formatTime, teamName, sortQuotasByMine } = require('../../utils/api')
+const { call, callQuiet, formatTime, teamName, sortQuotasByMine } = require('../../utils/api')
+const {
+  FILTER_ALL,
+  setMultiClubReady,
+  joinedClubs,
+  normalizeClubs,
+  writeFilter,
+  filterOptions,
+  resolveFilter,
+  clubLabel,
+  listPayload,
+  pickPreferredCreateClub
+} = require('../../utils/club-context')
 
 Page({
   data: {
@@ -6,6 +18,9 @@ Page({
     isAdmin: false,
     canDelete: false,
     myTeamId: 'team_jiong',
+    clubs: [],
+    filterOptions: [],
+    viewClubFilter: '',
     loading: true,
     loadingMore: false,
     page: 1,
@@ -14,33 +29,78 @@ Page({
   onShow() {
     this.load(true)
   },
+  onFilterChange(event) {
+    writeFilter(event.detail && event.detail.clubId)
+    this.load(true)
+  },
   load(reset) {
     const request = (this._loadSeq = (this._loadSeq || 0) + 1)
     if (reset) this.setData({ loading: true, activities: [] })
     else this.setData({ loadingMore: true })
     const page = reset ? 1 : this.data.page + 1
     const pendingMe = reset ? call('me') : Promise.resolve(null)
-    Promise.all([pendingMe, call('listActivities', { page })]).then(([profile, list]) => {
+    const pendingOrg = reset
+      ? callQuiet('orgMe').then((org) => {
+        setMultiClubReady(true)
+        return org
+      }).catch(() => {
+        setMultiClubReady(false)
+        return null
+      })
+      : Promise.resolve({ clubs: this.data.clubs })
+
+    Promise.all([pendingMe, pendingOrg]).then(([profile, org]) => {
+      const rawClubs = (org && org.clubs) || this.data.clubs || []
+      const clubs = normalizeClubs(rawClubs, profile && profile.user, profile && profile.teams)
+      const viewClubFilter = resolveFilter(clubs)
+      if (!joinedClubs(clubs).length) {
+        return { profile, list: { activities: [], teams: [], hasMore: false }, clubs, viewClubFilter: '' }
+      }
+      return call('listActivities', listPayload(page, viewClubFilter || FILTER_ALL)).then((list) => ({
+        profile, org, list, clubs, viewClubFilter
+      }))
+    }).then(({ profile, list, clubs, viewClubFilter }) => {
       if (request !== this._loadSeq) return
       const teams = list.teams || []
       const myTeamId = reset && profile && profile.user && profile.user.teamId
         ? profile.user.teamId
         : this.data.myTeamId
-      const mapped = (list.activities || []).map((activity) => ({
-        ...activity,
-        timeText: formatTime(activity.startTime),
-        quotaText: sortQuotasByMine(activity.quotas || [], myTeamId).map((quota) => {
-          return `${teamName(teams, quota.teamId)} ${quota.signed}/${quota.maxSignups}`
-        }).join('  ')
-      }))
+      const mapped = (list.activities || []).map((activity) => {
+        const isPool = activity.clubId === 'club_jielong' || activity.signupMode === 'pool'
+        const quotaText = isPool
+          ? `已报名 ${typeof activity.signedCount === 'number' ? activity.signedCount : ((activity.quotas || []).reduce((sum, quota) => sum + (quota.signed || 0), 0))}/${activity.maxSignedPlayers || 40}`
+          : sortQuotasByMine(activity.quotas || [], myTeamId).map((quota) => {
+            const name = teamName(teams, quota.teamId) || ((activity.teams || []).find((team) => team.id === quota.teamId) || {}).name || ''
+            return `${name} ${quota.signed}/${quota.maxSignups}`
+          }).join('  ')
+        return {
+          ...activity,
+          clubId: activity.clubId || 'club_wednesday',
+          clubLabel: clubLabel(activity.clubId || 'club_wednesday'),
+          timeText: formatTime(activity.startTime),
+          quotaText
+        }
+      }).filter((activity) => {
+        // 云端旧版可能忽略 clubId：前端再挡一层
+        if (!viewClubFilter) return false
+        if (viewClubFilter === 'club_jielong') return activity.clubId === 'club_jielong'
+        if (viewClubFilter === 'club_wednesday') return activity.clubId !== 'club_jielong'
+        return true
+      })
       const activities = (reset ? [] : this.data.activities).concat(mapped)
       const hasMore = !!list.hasMore && mapped.length > 0
+      const current = clubs.find((club) => club._id === viewClubFilter)
+      const clubAdmin = !!(current && (current.role === 'admin' || current.role === 'owner'))
+      const anyAdmin = clubs.some((club) => club.role === 'admin' || club.role === 'owner')
       this.setData({
         activities,
-        ...(reset && profile ? {
-          isAdmin: !!(profile.user && profile.user.isAdmin),
-          canDelete: !!(profile.user && profile.user.canGrantAdmin),
-          myTeamId
+        ...(reset ? {
+          isAdmin: clubAdmin || anyAdmin || !!(profile && profile.user && profile.user.isAdmin),
+          canDelete: !!(profile && profile.user && profile.user.canGrantAdmin) || clubs.some((club) => club.role === 'owner'),
+          myTeamId,
+          clubs,
+          filterOptions: filterOptions(clubs),
+          viewClubFilter
         } : {}),
         page,
         hasMore,
@@ -143,9 +203,25 @@ Page({
       })
       return
     }
-    wx.navigateTo({ url: `/pages/activity/activity?id=${event.currentTarget.dataset.id}` })
+    const activity = this.data.activities.find((item) => item._id === event.currentTarget.dataset.id)
+    if (activity && (activity.clubId === 'club_jielong' || activity.clubId === 'club_wednesday')) {
+      writeFilter(activity.clubId)
+    }
+    const page = activity && activity.clubId === 'club_jielong' ? 'session' : 'activity'
+    wx.navigateTo({ url: `/pages/${page}/${page}?id=${event.currentTarget.dataset.id}` })
   },
   create() {
-    wx.navigateTo({ url: '/pages/activity-edit/activity-edit' })
+    const preferred = pickPreferredCreateClub(this.data.viewClubFilter, this.data.clubs)
+    if (preferred) {
+      wx.navigateTo({ url: `/pages/activity-edit/activity-edit?clubId=${preferred}` })
+      return
+    }
+    wx.showActionSheet({
+      itemList: ['周三联', '界龙散客'],
+      success: (res) => {
+        const clubId = res.tapIndex === 1 ? 'club_jielong' : 'club_wednesday'
+        wx.navigateTo({ url: `/pages/activity-edit/activity-edit?clubId=${clubId}` })
+      }
+    })
   }
 })

@@ -6,7 +6,9 @@
     "pages/activity-edit/activity-edit",
     "pages/stats/stats",
     "pages/players/players",
-    "pages/me/me"
+    "pages/me/me",
+    "pages/club/club",
+    "pages/session/session"
   ],
   "window": {
     "navigationBarBackgroundColor": "#0f3d2e",
@@ -15,7 +17,8 @@
     "backgroundColor": "#f4f6f5"
   },
   "usingComponents": {
-    "mirror": "/components/mirror/mirror"
+    "mirror": "/components/mirror/mirror",
+    "club-nav": "/components/club-nav/club-nav"
   },
   "style": "v2",
   "sitemapLocation": "sitemap.json"

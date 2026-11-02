@@ -50,8 +50,16 @@ function deepseekConfig() {
   }
 }
 
-cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
+// 本地调试未配环境变量时 TCB_ENV 常为 local，DYNAMIC_CURRENT_ENV 会连不上正式库。
+// 本项目只有一个云环境；线上部署时 TCB_ENV 仍会被云端注入为正式 envId。
+const CLOUD_ENV_ID = 'cloudbase-d5g20kltv44b494f6'
+const runtimeEnv = process.env.TCB_ENV || process.env.SCF_NAMESPACE || ''
+cloud.init({
+  env: runtimeEnv && runtimeEnv !== 'local' ? runtimeEnv : CLOUD_ENV_ID
+})
 
+const org = require('./org')
+const { CLUB_JIELONG, CLUB_WEDNESDAY, withWednesdayGroup, membershipView } = require('./clubs')
 const db = cloud.database()
 const _ = db.command
 
@@ -110,6 +118,28 @@ exports.main = async (event) => {
     if (action === 'mirrorFeedback') return ok(await getMirrorApi().mirrorFeedback(OPENID, event))
     if (action === 'mirrorQuota') return ok(await getMirrorApi().mirrorQuota(OPENID))
     if (action === 'smokeSeedSignups') return ok(await smokeSeedSignups(OPENID, event))
+    // 仅用于确认模拟器打到本地代码；勿依赖其业务语义。
+    if (action === 'devEcho') {
+      const env = process.env.TCB_ENV || process.env.SCF_NAMESPACE || ''
+      return ok({ marker: 'devEcho-v1', env: env || 'local' })
+    }
+    if (action === 'orgMe') return ok(await org.orgMe(OPENID))
+    if (action === 'joinClub') return ok(await org.joinClub(OPENID, event))
+    if (action === 'setMyGroup') return ok(await org.setMyGroup(OPENID, event))
+    if (action === 'switchClub') return ok(await org.switchClub(OPENID, event))
+    if (action === 'updateClubGroup') return ok(await org.updateClubGroup(OPENID, event))
+    if (action === 'reorderClubGroups') return ok(await org.reorderClubGroups(OPENID, event))
+    if (action === 'setClubAdmin') return ok(await org.setClubAdmin(OPENID, event))
+    if (action === 'updateActivityBasics') return ok(await org.updateActivityBasics(OPENID, event))
+    if (action === 'assignTeams') return ok(await org.assignTeams(OPENID, event))
+    if (action === 'adminMoveSignup') return ok(await org.adminMoveSignup(OPENID, event))
+    if (action === 'adminSwapSignup') return ok(await org.adminSwapSignup(OPENID, event))
+    if (action === 'saveFixtureScore') return ok(await org.saveFixtureScore(OPENID, event))
+    if (action === 'updateFixture') return ok(await org.updateFixture(OPENID, event))
+    if (action === 'setSessionColor') return ok(await org.setSessionColor(OPENID, event))
+    if (action === 'addGoalEvent') return ok(await org.addGoalEvent(OPENID, event))
+    if (action === 'deleteGoalEvent') return ok(await org.deleteGoalEvent(OPENID, event))
+    if (action === 'clubStats') return ok(await org.clubStats(event))
     return fail('未知操作')
   } catch (error) {
     return fail(error.message || '操作失败')
@@ -161,7 +191,15 @@ async function saveProfile(openid, event) {
   const adminCount = await db.collection('users').where({ isAdmin: true }).count()
   const isAdmin = existing ? !!existing.isAdmin : adminCount.total === 0
   const canGrantAdmin = existing ? !!existing.canGrantAdmin : isAdmin
-  const data = { name, teamId, preferredPosition, isAdmin, canGrantAdmin, updatedAt: Date.now() }
+  const data = {
+    name,
+    teamId,
+    preferredPosition,
+    isAdmin,
+    canGrantAdmin,
+    memberships: withWednesdayGroup(existing && existing.memberships, teamId),
+    updatedAt: Date.now()
+  }
   if (avatarUrl !== undefined) data.avatarUrl = avatarUrl
   let user
   if (existing) {
@@ -254,26 +292,58 @@ async function setAdmin(openid, event) {
 async function listActivities(openid, event) {
   const pageSize = 10
   const page = Math.max(1, Number(event && event.page) || 1)
-  const res = await db.collection('activities').orderBy('startTime', 'desc').skip((page - 1) * pageSize).limit(pageSize + 1).get()
-  const rows = res.data.slice(0, pageSize)
+  const clubId = event && event.clubId
+  // 打开多球队筛选时顺带把旧活动补上 club_wednesday（有标记，只跑一次）
+  if (clubId === 'all' || clubId === CLUB_JIELONG || clubId === CLUB_WEDNESDAY) {
+    try { await org.ensureOrg() } catch (error) { /* 旧环境无 org 时忽略 */ }
+  }
+  let rows = []
+  let hasMore = false
+  if (clubId === 'all' || clubId === CLUB_JIELONG || clubId === CLUB_WEDNESDAY) {
+    const res = await db.collection('activities').orderBy('startTime', 'desc').limit(200).get()
+    const filtered = res.data.filter((activity) => {
+      if (clubId === 'all') return true
+      if (clubId === CLUB_JIELONG) return activity.clubId === CLUB_JIELONG
+      return !activity.clubId || activity.clubId === CLUB_WEDNESDAY
+    })
+    const start = (page - 1) * pageSize
+    rows = filtered.slice(start, start + pageSize)
+    hasMore = filtered.length > start + pageSize
+  } else {
+    // 旧客户端不传 clubId：仍只看周三联，避免把界龙场混进旧包
+    const res = await db.collection('activities').orderBy('startTime', 'desc').skip((page - 1) * pageSize).limit(pageSize + 1).get()
+    rows = res.data.filter((activity) => activity.clubId !== CLUB_JIELONG).slice(0, pageSize)
+    hasMore = res.data.length > pageSize
+  }
   const activities = []
   for (const activity of rows) {
     const quotas = await quotasOf(activity._id)
-    activities.push({ ...activity, quotas })
+    let signedCount = 0
+    if (activity.clubId === CLUB_JIELONG) {
+      const signed = await db.collection('signups').where({ activityId: activity._id, status: 'signed' }).count()
+      signedCount = signed.total
+    }
+    activities.push({ ...activity, quotas, signedCount })
   }
-  return { activities, teams: TEAMS, page, hasMore: res.data.length > pageSize }
+  return { activities, teams: TEAMS, page, hasMore }
 }
 
 async function deleteActivity(openid, event) {
-  await requireGrantOwner(openid, '只有授权人可以删除活动')
   const activityId = event.activityId
   if (!activityId) throw new Error('缺少活动')
-  await mustGet('activities', activityId)
+  const activity = await mustGet('activities', activityId)
+  if (activity.clubId === CLUB_JIELONG) {
+    const user = await requireUser(openid)
+    if (membershipView(user, CLUB_JIELONG).role !== 'owner') throw new Error('只有主管理员可以删除活动')
+  } else {
+    await requireGrantOwner(openid, '只有授权人可以删除活动')
+  }
   await removeMatching('quotas', { activityId })
   await removeMatching('signups', { activityId })
   await removeMatching('rounds', { activityId })
   await removeMatching('contributions', { activityId })
   await removeMatchingSafe('tactics_boards', { activityId })
+  await removeMatchingSafe('goal_events', { activityId })
   await db.collection('activities').doc(activityId).remove()
   return { removed: true }
 }
@@ -434,6 +504,13 @@ async function activityDetail(activityId, openid) {
   }
   const roundRes = await db.collection('rounds').where({ activityId }).orderBy('roundNo', 'asc').limit(50).get()
   const contributionRes = await db.collection('contributions').where({ activityId }).limit(100).get()
+  let goalEvents = []
+  try {
+    const eventRes = await db.collection('goal_events').where({ activityId }).limit(100).get()
+    goalEvents = eventRes.data
+  } catch (error) {
+    goalEvents = []
+  }
   return {
     activity,
     quotas,
@@ -442,6 +519,7 @@ async function activityDetail(activityId, openid) {
     rounds: roundRes.data,
     contributions: await readableAvatars(contributionRes.data),
     pigeons: pigeonRoster(contributionRes.data),
+    goalEvents,
     cancelWillPigeon: !!(me && willRecordPigeon(
       activity.startTime,
       Date.now(),
@@ -466,6 +544,7 @@ async function listMemberBriefs() {
 }
 
 async function createActivity(openid, event) {
+  if (event.clubId === CLUB_JIELONG) return org.createActivity(openid, event)
   await requireAdmin(openid)
   const title = String(event.title || '').trim()
   const location = String(event.location || '').trim()
@@ -481,6 +560,7 @@ async function createActivity(openid, event) {
       location,
       startTime,
       signupMode,
+      clubId: CLUB_WEDNESDAY,
       status: 'open',
       createdBy: openid,
       createdAt: Date.now()
@@ -503,7 +583,11 @@ async function smokeSeedSignups(openid, event) {
   }
   const mode = signupModeOf(activity)
   const teamId = event.teamId
-  if (!rosterTeams(mode).some((team) => team._id === teamId)) throw new Error('请选择球队')
+  const jielongOk = activity.clubId === CLUB_JIELONG && (
+    teamId === 'team_pending'
+    || (activity.teams || []).some((team) => team.id === teamId)
+  )
+  if (!jielongOk && !rosterTeams(mode).some((team) => team._id === teamId)) throw new Error('请选择球队')
   const status = event.status === 'waitlist' ? 'waitlist' : 'signed'
   const count = Math.min(Math.max(Number(event.count) || 1, 1), 30)
   const now = Date.now()
@@ -556,6 +640,7 @@ async function signup(openid, event) {
   const user = await requireUser(openid)
   const activityId = event.activityId
   const activity = await mustGet('activities', activityId)
+  if (activity.clubId === CLUB_JIELONG) return org.signup(openid, event)
   if (activity.startTime <= Date.now()) throw new Error('活动已开始，报名已截止。')
   await expireWaitlists(activityId)
   const mode = signupModeOf(activity)
@@ -597,6 +682,7 @@ async function signup(openid, event) {
 async function cancelSignup(openid, event) {
   const activityId = event.activityId
   const activity = await mustGet('activities', activityId)
+  if (activity.clubId === CLUB_JIELONG) return org.cancel(openid, event)
   if (activity.startTime <= Date.now()) throw new Error('活动已开始，报名已截止。')
   const existing = await db.collection('signups').where({
     activityId, _openid: openid, status: _.in(['signed', 'waitlist'])
@@ -949,7 +1035,8 @@ function formatSubscribeChineseTime(startTime) {
 async function saveRound(openid, event) {
   await requireAdmin(openid)
   const activityId = event.activityId
-  await mustGet('activities', activityId)
+  const activity = await mustGet('activities', activityId)
+  if (activity.clubId === CLUB_JIELONG) throw new Error('界龙散客用场次图记比分')
   const scoreJiong = parseScore(event.scoreJiong)
   const scorePudong = parseScore(event.scorePudong)
   if (event.roundId) {
@@ -977,8 +1064,8 @@ async function deleteRound(openid, event) {
 async function deleteContribution(openid, event) {
   await requireAdmin(openid)
   if (!event.contributionId) throw new Error('缺少记录')
-  const row = await mustGet('contributions', event.contributionId)
-  assertPigeonEditable(row)
+  await mustGet('contributions', event.contributionId)
+  // 系统鸽子也可以删；改进球/助攻仍走 assertPigeonEditable
   await db.collection('contributions').doc(event.contributionId).remove()
   return { removed: true }
 }
@@ -1068,8 +1155,13 @@ async function activityWeather(event) {
 async function homeSummary(openid, event) {
   const upcoming = await db.collection('activities').where({
     startTime: _.gt(Date.now())
-  }).orderBy('startTime', 'asc').limit(20).get()
-  const next = upcoming.data[0] || null
+  }).orderBy('startTime', 'asc').limit(30).get()
+  const wantClub = event && event.clubId
+  const next = (upcoming.data.filter((activity) => {
+    if (wantClub === 'all') return true
+    if (wantClub) return (activity.clubId || CLUB_WEDNESDAY) === wantClub
+    return activity.clubId !== CLUB_JIELONG
+  })[0]) || null
   let signedUp = false
   let signedTeamId = ''
   if (next) {
@@ -1088,12 +1180,20 @@ async function homeSummary(openid, event) {
     const waiting = await db.collection('signups').where({ activityId: next._id, status: 'waitlist' }).count()
     waitlistCount = waiting.total
   }
+  let signedCount = 0
+  if (next) {
+    const signed = await db.collection('signups').where({ activityId: next._id, status: 'signed' }).count()
+    signedCount = signed.total
+  }
   const nextActivity = next
-    ? { ...next, quotas: await quotasOf(next._id), signedUp, signedTeamId, waitlistCount }
+    ? { ...next, quotas: await quotasOf(next._id), signedUp, signedTeamId, waitlistCount, signedCount }
     : null
   const span = ['3m', '6m', '1y', '2y', '3y'].includes(event.span) ? event.span : '3m'
   const teamFilter = TEAMS.some((team) => team._id === event.teamId) ? event.teamId : ''
-  const boards = await getMirrorApi().loadBoardTotals(span, teamFilter)
+  const boardClub = wantClub === 'all' || wantClub === CLUB_JIELONG || wantClub === CLUB_WEDNESDAY
+    ? wantClub
+    : ''
+  const boards = await getMirrorApi().loadBoardTotals(span, teamFilter, Date.now(), boardClub)
   const { totals, attendanceRows } = boards
   const goalsByOpenid = {}
   for (const row of totals) goalsByOpenid[row.playerOpenid] = row.goals
@@ -1104,6 +1204,7 @@ async function homeSummary(openid, event) {
     nextActivity,
     span,
     teamId: teamFilter,
+    clubId: boardClub || '',
     goalsTop: await readableAvatars(topBy(totals, 'goals')),
     assistsTop: await readableAvatars(topBy(totals, 'assists')),
     attendancesTop: await readableAvatars(topBy(attendanceRows, 'attendances')),
@@ -1236,6 +1337,8 @@ async function readableAvatars(rows) {
 }
 
 function publicUser(user) {
+  const wednesday = membershipView(user, CLUB_WEDNESDAY)
+  const jielong = membershipView(user, CLUB_JIELONG)
   return {
     _id: user._id,
     name: user.name,
@@ -1244,7 +1347,21 @@ function publicUser(user) {
     preferredPosition: isValidPosition(user.preferredPosition) ? user.preferredPosition : 'mf',
     isAdmin: !!user.isAdmin,
     canGrantAdmin: !!user.canGrantAdmin,
-    createdAt: user.createdAt || 0
+    createdAt: user.createdAt || 0,
+    memberships: user.memberships || [],
+    clubRoles: {
+      [CLUB_WEDNESDAY]: wednesday.role || '',
+      [CLUB_JIELONG]: jielong.role || ''
+    },
+    clubJoined: {
+      [CLUB_WEDNESDAY]: !!wednesday.joined,
+      [CLUB_JIELONG]: !!jielong.joined
+    },
+    groupId: wednesday.groupId || user.teamId || '',
+    clubGroupIds: {
+      [CLUB_WEDNESDAY]: wednesday.groupId || user.teamId || '',
+      [CLUB_JIELONG]: jielong.groupId || ''
+    }
   }
 }
 
