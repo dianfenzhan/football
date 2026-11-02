@@ -68,5 +68,4 @@
   </view>
 
   <nav current="players" />
-  <mirror />
 </view>

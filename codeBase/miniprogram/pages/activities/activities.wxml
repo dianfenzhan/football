@@ -22,5 +22,4 @@
   <view wx:elif="{{!hasMore && activities.length > 0}}" class="muted">没有更多了</view>
   <view wx:if="{{isAdmin}}" class="fab" bindtap="create">＋</view>
   <nav current="activities" />
-  <mirror />
 </view>

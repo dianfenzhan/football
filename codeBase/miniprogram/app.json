@@ -14,9 +14,6 @@
     "navigationBarTextStyle": "white",
     "backgroundColor": "#f4f6f5"
   },
-  "usingComponents": {
-    "mirror": "/components/mirror/mirror"
-  },
   "style": "v2",
   "sitemapLocation": "sitemap.json"
 }

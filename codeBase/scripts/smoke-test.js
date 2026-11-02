@@ -782,56 +782,6 @@ async function main() {
 
     assertOk('cancelSignup after other team', await callApi(miniProgram, 'cancelSignup', { activityId }))
 
-    const mirrorFaq = assertOk('mirrorAsk faq pigeon', await callApi(miniProgram, 'mirrorAsk', {
-      question: '取消报名会记鸽子吗'
-    }))
-    if (!mirrorFaq.answer || !/鸽子|4 小时|4小时/.test(mirrorFaq.answer)) {
-      throw new Error('mirrorAsk faq: unexpected answer')
-    }
-    if (mirrorFaq.usedModel) throw new Error('mirrorAsk faq: should not use model')
-    if (mirrorFaq.hitId !== 'signup-cancel-pigeon') {
-      throw new Error('mirrorAsk faq: hitId expected signup-cancel-pigeon got ' + mirrorFaq.hitId)
-    }
-    pass('mirrorAsk faq pigeon')
-
-    const mirrorNext = assertOk('mirrorAsk live next', await callApi(miniProgram, 'mirrorAsk', {
-      question: '下一场什么时候'
-    }))
-    if (!mirrorNext.answer) throw new Error('mirrorAsk live next: empty answer')
-    if (mirrorNext.usedModel) throw new Error('mirrorAsk live next: should not use model')
-    pass('mirrorAsk live next')
-
-    const quotaBeforeModel = assertOk('mirrorQuota before model', await callApi(miniProgram, 'mirrorQuota'))
-    const mirrorModel = assertOk('mirrorAsk model path', await callApi(miniProgram, 'mirrorAsk', {
-      question: '周三去不了咋整'
-    }))
-    if (!mirrorModel.answer) throw new Error('mirrorAsk model: empty answer')
-    // 未配置真实 DeepSeek key 或模型失败时允许兜底话术，且不计次
-    if (/暂未开通|开小差/.test(mirrorModel.answer)
-      && mirrorModel.remaining !== quotaBeforeModel.remaining) {
-      throw new Error('mirrorAsk model failure should not consume quota')
-    }
-    pass('mirrorAsk model path')
-
-    if (mirrorFaq.logId) {
-      assertOk('mirrorFeedback', await callApi(miniProgram, 'mirrorFeedback', {
-        logId: mirrorFaq.logId,
-        useful: true
-      }))
-    }
-
-    const mirrorQuota = assertOk('mirrorQuota', await callApi(miniProgram, 'mirrorQuota'))
-    const expectedWeekLimit = user.canGrantAdmin ? 100 : (user.isAdmin ? 50 : 15)
-    if (mirrorQuota.weekLimit !== expectedWeekLimit) {
-      throw new Error('mirrorQuota: weekLimit expected ' + expectedWeekLimit + ' got ' + mirrorQuota.weekLimit)
-    }
-    if (typeof mirrorQuota.remaining !== 'number'
-      || mirrorQuota.remaining < 0
-      || mirrorQuota.remaining > expectedWeekLimit) {
-      throw new Error('mirrorQuota: remaining out of range')
-    }
-    pass('mirrorQuota')
-
     assertFail('saveTacticsBoard unsigned', await callApi(miniProgram, 'saveTacticsBoard', {
       scope: 'activity',
       activityId,

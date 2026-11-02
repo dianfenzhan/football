@@ -73,35 +73,13 @@ async function main() {
   if (secrets.subscribePromoteTemplate) {
     envVariables.SUBSCRIBE_PROMOTE_TEMPLATE = String(secrets.subscribePromoteTemplate)
   }
-  if (secrets.deepseekApiKey) {
-    envVariables.DEEPSEEK_API_KEY = String(secrets.deepseekApiKey)
-  }
-  if (secrets.deepseekBaseUrl) {
-    envVariables.DEEPSEEK_BASE_URL = String(secrets.deepseekBaseUrl)
-  }
-  if (secrets.deepseekModel) {
-    envVariables.DEEPSEEK_MODEL = String(secrets.deepseekModel)
-  }
 
   // miniprogram-ci 的 uploadFunction 不接收环境变量，密钥随函数目录里的本地文件上传，且该文件已 gitignore
   const localPath = path.join(projectPath, 'cloudfunctions/api/subscribe.local.js')
   fs.writeFileSync(localPath, `module.exports = ${JSON.stringify({
     SUBSCRIBE_REMIND_TEMPLATE: envVariables.SUBSCRIBE_REMIND_TEMPLATE || '',
-    SUBSCRIBE_PROMOTE_TEMPLATE: envVariables.SUBSCRIBE_PROMOTE_TEMPLATE || '',
-    DEEPSEEK_API_KEY: envVariables.DEEPSEEK_API_KEY || '',
-    DEEPSEEK_BASE_URL: envVariables.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
-    DEEPSEEK_MODEL: envVariables.DEEPSEEK_MODEL || 'deepseek-flash'
+    SUBSCRIBE_PROMOTE_TEMPLATE: envVariables.SUBSCRIBE_PROMOTE_TEMPLATE || ''
   })}\n`)
-
-  // 魔镜知识文件：以 doc/ 为准同步进云函数目录
-  const knowledgeDir = path.join(projectPath, 'cloudfunctions/api/knowledge')
-  fs.mkdirSync(knowledgeDir, { recursive: true })
-  for (const name of ['mirror-faq.json', 'mirror.md']) {
-    const from = path.resolve(projectPath, '../doc', name)
-    if (!fs.existsSync(from)) throw new Error(`缺少魔镜知识文件：${from}`)
-    fs.copyFileSync(from, path.join(knowledgeDir, name))
-  }
-  console.log('已同步魔镜知识文件 mirror-faq.json / mirror.md')
 
   console.log('上传云函数 api ...')
   console.log('本地密钥随代码上传', Object.keys(envVariables).join(', ') || '无')

@@ -49,5 +49,4 @@
     </view>
   </view>
   <nav current="me" />
-  <mirror />
 </view>

@@ -19,6 +19,7 @@ const {
   topBy,
   totalsByPlayer,
   attendancesByPlayer,
+  boardRows,
   waitUntilAt,
   withHomeTeam,
   isValidPosition,
@@ -27,7 +28,6 @@ const {
   validateTacticsBoardSave
 } = require('./rules')
 const { fetchActivityWeather } = require('./weather')
-const { createMirrorAsk } = require('./mirror-runtime')
 
 function localSecret(name) {
   if (process.env[name]) return process.env[name]
@@ -42,34 +42,10 @@ function subscribeTemplate(name) {
   return localSecret(name)
 }
 
-function deepseekConfig() {
-  return {
-    apiKey: localSecret('DEEPSEEK_API_KEY'),
-    baseUrl: localSecret('DEEPSEEK_BASE_URL') || 'https://api.deepseek.com',
-    model: localSecret('DEEPSEEK_MODEL') || 'deepseek-flash'
-  }
-}
-
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 const db = cloud.database()
 const _ = db.command
-
-let mirrorApi = null
-function getMirrorApi() {
-  if (!mirrorApi) {
-    mirrorApi = createMirrorAsk({
-      db,
-      _,
-      collect,
-      quotasOf,
-      homeTeams,
-      findUser,
-      deepseekConfig
-    })
-  }
-  return mirrorApi
-}
 
 exports.main = async (event) => {
   try {
@@ -106,9 +82,6 @@ exports.main = async (event) => {
     if (action === 'stats') return ok(await stats(event))
     if (action === 'homeSummary') return ok(await homeSummary(OPENID, event))
     if (action === 'activityWeather') return ok(await activityWeather(event))
-    if (action === 'mirrorAsk') return ok(await getMirrorApi().mirrorAsk(OPENID, event))
-    if (action === 'mirrorFeedback') return ok(await getMirrorApi().mirrorFeedback(OPENID, event))
-    if (action === 'mirrorQuota') return ok(await getMirrorApi().mirrorQuota(OPENID))
     if (action === 'smokeSeedSignups') return ok(await smokeSeedSignups(OPENID, event))
     return fail('未知操作')
   } catch (error) {
@@ -1065,6 +1038,37 @@ async function activityWeather(event) {
   return fetchActivityWeather(event.startTime)
 }
 
+async function loadBoardTotals(span, teamId, now = Date.now()) {
+  const start = recentStart(span, now)
+  const teamFilter = TEAMS.some((team) => team._id === teamId) ? teamId : ''
+  const homes = await homeTeams()
+  const contributions = withHomeTeam(
+    await collect('contributions', { activityStartTime: _.gte(start) }),
+    homes
+  ).filter((row) => !teamFilter || row.teamId === teamFilter)
+  const totals = totalsByPlayer(boardRows(contributions, now))
+  const activities = await collect('activities', { startTime: _.gte(start) })
+  const startedIds = activities
+    .filter((activity) => activity.startTime <= now)
+    .map((activity) => activity._id)
+  let attendanceRows = []
+  if (startedIds.length) {
+    const signups = await collect('signups', {
+      status: 'signed',
+      activityId: _.in(startedIds)
+    })
+    const absentKeys = contributions
+      .filter((row) => row.absent)
+      .map((row) => `${row.activityId}:${row.playerOpenid}`)
+    attendanceRows = attendancesByPlayer(withHomeTeam(signups, homes), {
+      startedIds,
+      absentKeys,
+      teamFilter
+    })
+  }
+  return { totals, attendanceRows, span, teamId: teamFilter }
+}
+
 async function homeSummary(openid, event) {
   const upcoming = await db.collection('activities').where({
     startTime: _.gt(Date.now())
@@ -1093,7 +1097,7 @@ async function homeSummary(openid, event) {
     : null
   const span = ['3m', '6m', '1y', '2y', '3y'].includes(event.span) ? event.span : '3m'
   const teamFilter = TEAMS.some((team) => team._id === event.teamId) ? event.teamId : ''
-  const boards = await getMirrorApi().loadBoardTotals(span, teamFilter)
+  const boards = await loadBoardTotals(span, teamFilter)
   const { totals, attendanceRows } = boards
   const goalsByOpenid = {}
   for (const row of totals) goalsByOpenid[row.playerOpenid] = row.goals

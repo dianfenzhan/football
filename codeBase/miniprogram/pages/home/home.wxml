@@ -52,5 +52,4 @@
     <button wx:if="{{isAdmin && !next}}" class="btn hero-cta" bindtap="create">＋ 新建活动</button>
   </block>
   <nav current="home" />
-  <mirror />
 </view>

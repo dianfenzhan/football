@@ -430,7 +430,6 @@
   </view>
 
   <nav current="activities" />
-  <mirror />
 </view>
 
 <view wx:if="{{loadFailed}}" class="page">
@@ -440,5 +439,4 @@
     <view class="muted">链接可能已失效，找队友要个新链接吧</view>
   </view>
   <nav current="activities" />
-  <mirror />
 </view>

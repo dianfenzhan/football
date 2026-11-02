@@ -58,5 +58,4 @@
     <view class="muted" wx:if="{{signupMode === 'joint'}}">共享资源池分三队报名，每组固定 8 人，下方不用再选人数。</view>
     <button class="btn" loading="{{saving}}" bindtap="submit">创建</button>
   </view>
-  <mirror />
 </view>

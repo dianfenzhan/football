@@ -47,5 +47,4 @@
   </view>
 
   <nav current="stats" />
-  <mirror />
 </view>
