@@ -33,12 +33,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8rpx;
   padding: 8rpx 16rpx;
-}
-
-.title-wrap.locked {
-  gap: 0;
 }
 
 .title {
@@ -48,69 +43,77 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.2;
+}
+
+.club-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  height: 44rpx;
+  padding-bottom: 8rpx;
+  opacity: 0.88;
+}
+
+.club-label {
+  font-size: 22rpx;
+  max-width: 280rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chev {
-  font-size: 22rpx;
-  opacity: 0.9;
-  margin-top: 4rpx;
+  font-size: 18rpx;
 }
 
-.sheet { position: fixed; inset: 0; z-index: 1000; }
-.mask { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.4); }
-.body {
-  position: absolute;
+.menu-layer {
+  position: fixed;
   left: 0;
   right: 0;
+  top: 0;
   bottom: 0;
+  z-index: 520;
+}
+
+.menu-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.menu {
+  position: absolute;
+  left: 48rpx;
+  right: 48rpx;
   background: #fff;
-  border-radius: 28rpx 28rpx 0 0;
-  padding: 28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
+  border-radius: 20rpx;
+  overflow: hidden;
+  box-shadow: 0 12rpx 40rpx rgba(15, 61, 46, 0.18);
 }
 
-.sheet-title {
-  font-size: 34rpx;
-  font-weight: 700;
-  color: #0f3d2e;
-}
-
-.sheet-sub {
-  margin: 8rpx 0 20rpx;
-  color: #66706c;
-  font-size: 24rpx;
-}
-
-.row {
+.menu-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16rpx;
-  padding: 24rpx 20rpx;
-  border-radius: 18rpx;
-  background: #f4f6f5;
-  margin-bottom: 12rpx;
-}
-
-.row.on { background: #e8efe9; }
-
-.row-name {
+  padding: 28rpx 32rpx;
   font-size: 30rpx;
-  font-weight: 600;
+  color: #1c2421;
+  border-bottom: 1rpx solid #eef2f0;
+}
+
+.menu-item:last-child {
+  border-bottom: none;
+}
+
+.menu-item.on {
   color: #0f3d2e;
+  font-weight: 700;
+  background: #f3f7f5;
 }
 
-.badge {
-  flex-shrink: 0;
-  background: #0f3d2e;
-  color: #fff;
-  font-size: 22rpx;
-  padding: 6rpx 14rpx;
-  border-radius: 999rpx;
-}
-
-.cancel {
-  text-align: center;
-  padding: 24rpx 0 8rpx;
-  color: #66706c;
+.tick {
+  color: #0f3d2e;
   font-size: 28rpx;
 }

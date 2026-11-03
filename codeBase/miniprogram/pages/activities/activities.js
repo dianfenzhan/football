@@ -68,7 +68,7 @@ Page({
       const mapped = (list.activities || []).map((activity) => {
         const isPool = activity.clubId === 'club_jielong' || activity.signupMode === 'pool'
         const quotaText = isPool
-          ? `已报名 ${typeof activity.signedCount === 'number' ? activity.signedCount : ((activity.quotas || []).reduce((sum, quota) => sum + (quota.signed || 0), 0))}/${activity.maxSignedPlayers || 40}`
+          ? `已报名 ${typeof activity.signedCount === 'number' ? activity.signedCount : ((activity.quotas || []).reduce((sum, quota) => sum + (quota.signed || 0), 0))} 人`
           : sortQuotasByMine(activity.quotas || [], myTeamId).map((quota) => {
             const name = teamName(teams, quota.teamId) || ((activity.teams || []).find((team) => team.id === quota.teamId) || {}).name || ''
             return `${name} ${quota.signed}/${quota.maxSignups}`
@@ -78,7 +78,8 @@ Page({
           clubId: activity.clubId || 'club_wednesday',
           clubLabel: clubLabel(activity.clubId || 'club_wednesday'),
           timeText: formatTime(activity.startTime),
-          quotaText
+          quotaText,
+          expired: Date.now() > activity.startTime + 12 * 60 * 60 * 1000
         }
       }).filter((activity) => {
         // 云端旧版可能忽略 clubId：前端再挡一层
@@ -96,7 +97,8 @@ Page({
         activities,
         ...(reset ? {
           isAdmin: clubAdmin || anyAdmin || !!(profile && profile.user && profile.user.isAdmin),
-          canDelete: !!(profile && profile.user && profile.user.canGrantAdmin) || clubs.some((club) => club.role === 'owner'),
+          // 只有授权人（主管理员）可删活动；普通管理员也不能删
+          canDelete: !!(profile && profile.user && profile.user.canGrantAdmin),
           myTeamId,
           clubs,
           filterOptions: filterOptions(clubs),
@@ -217,7 +219,7 @@ Page({
       return
     }
     wx.showActionSheet({
-      itemList: ['周三联', '界龙散客'],
+      itemList: ['周三联', '界龙散客队'],
       success: (res) => {
         const clubId = res.tapIndex === 1 ? 'club_jielong' : 'club_wednesday'
         wx.navigateTo({ url: `/pages/activity-edit/activity-edit?clubId=${clubId}` })

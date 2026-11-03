@@ -1,6 +1,6 @@
 <view class="page">
-  <club-nav show-back="{{true}}" bind:change="onFilterChange" />
-  <view class="muted tip">入队请走活动分享链接报名。这里只维护已加入球队的分组；多队时点顶栏队名可切换。</view>
+  <club-nav title="球队" show-back="{{true}}" bind:change="onFilterChange" />
+  <view class="muted tip">入队请走活动分享链接报名。这里只维护已加入球队的分组；多队时用顶栏下方芯片切换筛选。</view>
 
   <view wx:if="{{!clubs.length}}" class="card muted">
     球队信息还没同步。请让管理员把活动分享给你，打开链接报名后会自动加入。

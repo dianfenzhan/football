@@ -1,5 +1,12 @@
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 const CST_OFFSET = 8 * 60 * 60 * 1000
+const {
+  TEAMS,
+  normalizePlayerName,
+  normalizePreferredPosition,
+  isValidPosition,
+  randomPreferredPosition
+} = require('./rules')
 
 const VENUE_JIELONG = {
   _id: 'venue_jielong',
@@ -40,6 +47,7 @@ const CLUB_SEEDS = [
     ],
     config: {
       cancelSignedCutoffHours: 4,
+      remindBeforeHours: 2,
       waitlistLimit: 3,
       jointWaitlistLimit: 6,
       maxOnPitch: 8,
@@ -48,9 +56,9 @@ const CLUB_SEEDS = [
   },
   {
     _id: CLUB_JIELONG,
-    name: '界龙散客',
+    name: '界龙散客队',
     signupModes: ['pool'],
-    // 常驻名册六组（我的 / 球员 / 数据筛）；本场报名仍进待分队，由老板当场再分
+    // 常驻名册六组；本场报名按 8 人自动扩队，也可一键按名册组分 6 队
     groups: [
       { id: 'jl_tazi', name: '塔子🕊', jerseyColor: '绿', color: '#1d6b50' },
       { id: 'jl_jielong', name: '界龙⭐️', jerseyColor: '白', color: '#f4f4f4' },
@@ -60,7 +68,8 @@ const CLUB_SEEDS = [
       { id: 'jl_other', name: '散客⚽️', jerseyColor: '黑', color: '#1c2421' }
     ],
     config: {
-      cancelSignedCutoffHours: 4,
+      cancelSignedCutoffHours: 1.5,
+      remindBeforeHours: 2,
       waitlistLimit: 12,
       jointWaitlistLimit: 0,
       maxOnPitch: 8,
@@ -73,6 +82,24 @@ const CLUB_SEEDS = [
 
 function clubSeed(clubId) {
   return CLUB_SEEDS.find((club) => club._id === clubId) || null
+}
+
+/** 临期取消记鸽子的小时数：周三联 4，界龙 1.5 */
+function pigeonCutoffHours(clubId) {
+  const seed = clubSeed(clubId || CLUB_WEDNESDAY)
+  const hours = seed && seed.config && seed.config.cancelSignedCutoffHours
+  return hours == null ? 4 : Number(hours)
+}
+
+/** 开赛提醒提前小时数：周三联 2，界龙 2 */
+function remindBeforeHours(clubId) {
+  const seed = clubSeed(clubId || CLUB_WEDNESDAY)
+  const hours = seed && seed.config && seed.config.remindBeforeHours
+  return hours == null ? 2 : Number(hours)
+}
+
+function remindLeadMs(clubId) {
+  return remindBeforeHours(clubId) * 60 * 60 * 1000
 }
 
 function weekdayName(timestamp) {
@@ -91,11 +118,17 @@ function membershipView(user, clubId) {
   const hit = list.find((item) => item && item.clubId === clubId) || null
   let role = hit && hit.role ? hit.role : ''
   if (!role && user && user.canGrantAdmin) role = 'owner'
-  else if (!role && user && user.isAdmin && clubId === CLUB_WEDNESDAY) role = 'admin'
+  else if (!role && user && user.isAdmin) role = 'admin'
   else if (!role && hit) role = 'member'
   else if (!role && user && clubId === CLUB_WEDNESDAY && user.teamId) role = 'member'
-  const groupId = (hit && hit.groupId) || (clubId === CLUB_WEDNESDAY ? ((user && user.teamId) || '') : '')
-  const joined = !!(hit || role || (clubId === CLUB_WEDNESDAY && user && user.teamId))
+  let groupId = (hit && hit.groupId) || (clubId === CLUB_WEDNESDAY ? ((user && user.teamId) || '') : '')
+  const joined = !!(
+    hit
+    || (user && user.canGrantAdmin)
+    || (clubId === CLUB_WEDNESDAY && user && (user.teamId || user.isAdmin))
+  )
+  // 界龙已入队但未写名册组 → 视为「散客⚽️」（与「我的」展示、报名兜底一致）
+  if (!groupId && joined && clubId === CLUB_JIELONG) groupId = JIELONG_DEFAULT_GROUP
   return { role, groupId, joined }
 }
 
@@ -118,6 +151,74 @@ function withClubMembership(memberships, clubId, patch) {
   if (patch.role) hit.role = patch.role
   if (patch.labels) hit.labels = patch.labels
   return list
+}
+
+function hasClubProfile(user, clubId, clubGroups) {
+  if (!user || !String(user.name || '').trim()) return false
+  const view = membershipView(user, clubId)
+  if (!view.joined || !view.groupId) return false
+  const groups = Array.isArray(clubGroups) && clubGroups.length
+    ? clubGroups
+    : ((clubSeed(clubId) && clubSeed(clubId).groups) || [])
+  if (!groups.length) return true
+  return groups.some((group) => (group.id || group._id) === view.groupId)
+}
+
+function buildProfileUpdate(existing, event = {}, options = {}) {
+  const name = normalizePlayerName(event.name)
+  const avatarUrl = typeof event.avatarUrl === 'string' ? event.avatarUrl : undefined
+  const preferredPosition = event.preferredPosition !== undefined && event.preferredPosition !== ''
+    ? normalizePreferredPosition(event.preferredPosition, options.randomFn)
+    : (existing && isValidPosition(existing.preferredPosition)
+      ? existing.preferredPosition
+      : randomPreferredPosition(options.randomFn))
+  const hasAnyAdmin = options.hasAnyAdmin !== undefined ? !!options.hasAnyAdmin : true
+  const isAdmin = existing ? !!existing.isAdmin : !hasAnyAdmin
+  const canGrantAdmin = existing ? !!existing.canGrantAdmin : isAdmin
+
+  let teamId = (existing && existing.teamId) || ''
+  let memberships = Array.isArray(existing && existing.memberships)
+    ? existing.memberships.map((item) => Object.assign({}, item))
+    : []
+  let currentClubId = (existing && existing.currentClubId) || ''
+
+  const targetClubId = String(event.clubId || '').trim()
+  const hasExplicitTeam = event.teamId !== undefined && event.teamId !== ''
+
+  if (targetClubId === CLUB_JIELONG) {
+    const groups = (Array.isArray(options.jielongGroups) && options.jielongGroups.length)
+      ? options.jielongGroups
+      : ((clubSeed(CLUB_JIELONG) && clubSeed(CLUB_JIELONG).groups) || [])
+    const groupId = String(event.groupId || event.teamId || '').trim()
+    if (!groupId || !groups.some((item) => item.id === groupId)) {
+      throw new Error('请选择名册分组')
+    }
+    const current = membershipView(existing, CLUB_JIELONG)
+    const role = current.role === 'owner' || current.role === 'admin' ? current.role : 'member'
+    memberships = withClubMembership(memberships, CLUB_JIELONG, { groupId, role })
+    currentClubId = CLUB_JIELONG
+  } else if (targetClubId === CLUB_WEDNESDAY || hasExplicitTeam) {
+    const wedTeamId = targetClubId === CLUB_WEDNESDAY && event.groupId
+      ? String(event.groupId).trim()
+      : String(event.teamId || '').trim()
+    if (!TEAMS.some((team) => team._id === wedTeamId)) throw new Error('请选择球队')
+    teamId = wedTeamId
+    memberships = withWednesdayGroup(memberships, wedTeamId)
+    currentClubId = CLUB_WEDNESDAY
+  }
+
+  const data = {
+    name,
+    teamId,
+    preferredPosition,
+    isAdmin,
+    canGrantAdmin,
+    memberships,
+    updatedAt: options.now || Date.now()
+  }
+  if (currentClubId) data.currentClubId = currentClubId
+  if (avatarUrl !== undefined) data.avatarUrl = avatarUrl
+  return data
 }
 
 function renameGroup(groups, groupId, name) {
@@ -169,6 +270,44 @@ function buildSessionTeams(teamCount) {
   return SESSION_TEAM_STYLES.slice(0, count).map((item) => Object.assign({}, item))
 }
 
+/** 第 signedIndex（0 起）个正选应进第几队：每队 teamSize 人，最多 maxTeams 队，溢出进最后一队 */
+function sessionTeamSlot(signedIndex, teamSize = 8, maxTeams = SESSION_TEAM_STYLES.length) {
+  const size = Math.max(1, Number(teamSize) || 8)
+  const max = Math.min(Math.max(Number(maxTeams) || SESSION_TEAM_STYLES.length, 1), SESSION_TEAM_STYLES.length)
+  const index = Math.max(0, Number(signedIndex) || 0)
+  return Math.min(Math.floor(index / size), max - 1)
+}
+
+/** 把 activity.teams 扩到至少 neededCount 支（沿用已有队，补 SESSION_TEAM_STYLES） */
+function expandSessionTeams(teams, neededCount) {
+  const list = Array.isArray(teams) ? teams.slice() : []
+  const needed = Math.min(Math.max(Number(neededCount) || 1, 1), SESSION_TEAM_STYLES.length)
+  const used = new Set(list.map((team) => team && team.id).filter(Boolean))
+  while (list.length < needed) {
+    const style = SESSION_TEAM_STYLES.find((item) => !used.has(item.id))
+    if (!style) break
+    used.add(style.id)
+    list.push(Object.assign({}, style))
+  }
+  return list
+}
+
+/**
+ * 按报名序号自动入队：扩队 + 给出本场 teamId。
+ * signedIndex：当前将写入的正选是全场第几个（0 起）。
+ */
+function autoSessionPlacement(signedIndex, existingTeams, teamSize = 8) {
+  const slot = sessionTeamSlot(signedIndex, teamSize, SESSION_TEAM_STYLES.length)
+  const teams = expandSessionTeams(existingTeams, slot + 1)
+  const team = teams[slot] || teams[teams.length - 1]
+  return {
+    teams,
+    teamId: team.id,
+    teamIndex: slot,
+    teamCount: teams.length
+  }
+}
+
 /**
  * 尽量按每队 targetSize（默认 8）分配。
  * 人不够时尽量匀开（允许 7 对 8）；人太多时只取前 capacity 人，其余留未分队。
@@ -201,16 +340,44 @@ function dividePlayers(players, teamCount, targetSize = 8) {
   }
 }
 
-function placeInPool(input) {
-  const signed = Number(input.signedCount || 0)
-  const waiting = Number(input.waitlistCount || 0)
-  const cap = Number(input.maxSignedPlayers || 40)
-  const waitLimit = Number(input.waitlistLimit || 12)
-  if (signed < cap) {
-    return { status: 'signed', teamId: PENDING_TEAM, via: 'pool', label: '已报名' }
+/** 按名册组落到 6 个场次队；无名册组进最后一队（散客） */
+function divideByRosterGroups(players, groupIdOf, rosterGroups) {
+  const groups = Array.isArray(rosterGroups) && rosterGroups.length
+    ? rosterGroups.slice(0, SESSION_TEAM_STYLES.length)
+    : []
+  const teams = SESSION_TEAM_STYLES.map((style, index) => {
+    const group = groups[index]
+    if (!group) return Object.assign({}, style)
+    return Object.assign({}, style, {
+      name: group.name || style.name,
+      color: group.color || style.color,
+      jerseyColor: group.jerseyColor || style.jerseyColor,
+      rosterGroupId: group.id
+    })
+  })
+  const groupToTeam = {}
+  groups.forEach((group, index) => {
+    if (group && group.id) groupToTeam[group.id] = teams[index].id
+  })
+  const fallbackTeamId = teams[teams.length - 1].id
+  const assignments = {}
+  teams.forEach((team) => { assignments[team.id] = [] })
+  ;(players || []).forEach((player) => {
+    const openid = player && (player._openid || player.openid)
+    const groupId = typeof groupIdOf === 'function' ? groupIdOf(openid, player) : ''
+    const teamId = (groupId && groupToTeam[groupId]) || fallbackTeamId
+    assignments[teamId].push(player)
+  })
+  return {
+    teams,
+    assignments,
+    assignedCount: (players || []).length,
+    leftover: []
   }
-  if (waiting >= waitLimit) throw new Error('后补已满')
-  return { status: 'waitlist', teamId: PENDING_TEAM, via: 'waitlist', label: '后补' }
+}
+
+function placeInPool() {
+  return { status: 'signed', teamId: PENDING_TEAM, via: 'pool', label: '已报名' }
 }
 
 function assertAdminMove(input) {
@@ -224,8 +391,9 @@ function assertAdminMove(input) {
 }
 
 function rosterLocked(rounds, events) {
-  const scored = (rounds || []).some((round) => round.scoreA != null || round.scoreB != null)
-  return scored || (events || []).length > 0
+  // 只按比分锁定；进球/助攻可边记边调人，不锁分队
+  void events
+  return (rounds || []).some((round) => round.scoreA != null || round.scoreB != null)
 }
 
 function matchRow(roundNo, pitchId, teamAId, teamBId, matchType) {
@@ -240,20 +408,34 @@ function matchRow(roundNo, pitchId, teamAId, teamBId, matchType) {
   }
 }
 
-function cupFixtures(groupIds) {
-  const ids = groupIds || []
+function shuffleIds(list, rng) {
+  const random = typeof rng === 'function' ? rng : Math.random
+  const copy = (list || []).slice()
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1))
+    const temp = copy[i]
+    copy[i] = copy[j]
+    copy[j] = temp
+  }
+  return copy
+}
+
+function cupFixtures(groupIds, rng) {
+  const ids = shuffleIds(groupIds || [], rng)
   if (ids.length === 4) {
+    // 3-1-1-1：抽到第 1 位的 a 在小组赛踢 3 场 1 号场，其余三队各踢 1 场 1 号场
     const [a, b, c, d] = ids
     return [
       matchRow(1, 'pitch_1', a, b),
       matchRow(1, 'pitch_2', c, d),
       matchRow(2, 'pitch_1', a, c),
       matchRow(2, 'pitch_2', b, d),
-      matchRow(3, 'pitch_1', b, c),
-      matchRow(3, 'pitch_2', a, d)
+      matchRow(3, 'pitch_1', a, d),
+      matchRow(3, 'pitch_2', b, c)
     ]
   }
   if (ids.length === 5) {
+    // 随机洗牌后套入 5 轮模板：每队踢 4 场、轮空 1 轮、1 号场严格各 2 场
     const [a, b, c, d, e] = ids
     return [
       matchRow(1, 'pitch_1', a, b),
@@ -268,31 +450,60 @@ function cupFixtures(groupIds) {
       matchRow(5, 'pitch_2', b, e)
     ]
   }
-  if (ids.length === 6) {
-    const [a, b, c, d, e, f] = ids
-    return [
-      matchRow(1, 'pitch_1', a, b),
-      matchRow(1, 'pitch_2', c, d),
-      matchRow(2, 'pitch_1', a, c),
-      matchRow(2, 'pitch_2', e, f),
-      matchRow(3, 'pitch_1', a, d),
-      matchRow(3, 'pitch_2', b, e),
-      matchRow(4, 'pitch_1', b, f),
-      matchRow(4, 'pitch_2', a, e),
-      matchRow(5, 'pitch_1', c, e),
-      matchRow(5, 'pitch_2', a, f),
-      matchRow(6, 'pitch_1', d, e),
-      matchRow(6, 'pitch_2', b, c),
-      matchRow(7, 'pitch_1', c, f),
-      matchRow(7, 'pitch_2', b, d),
-      matchRow(8, 'pitch_1', d, f)
-    ]
-  }
   return []
 }
 
 function shouldAutoFixture(teamCount) {
-  return teamCount === 4 || teamCount === 5 || teamCount === 6
+  return teamCount === 4 || teamCount === 5
+}
+
+const CUP_MIN_PLAYERS = 24
+
+function evaluateJielongCup(teams, signups) {
+  const teamList = (teams || []).filter((team) => team && team.id && team.id !== PENDING_TEAM)
+  const validTeamIds = new Set(teamList.map((team) => team.id))
+  const countByTeam = {}
+  let pendingCount = 0
+  ;(signups || []).forEach((row) => {
+    if (!row || (row.status && row.status !== 'signed')) return
+    const teamId = row.teamId || PENDING_TEAM
+    if (teamId === PENDING_TEAM || !validTeamIds.has(teamId)) {
+      pendingCount += 1
+      return
+    }
+    countByTeam[teamId] = (countByTeam[teamId] || 0) + 1
+  })
+  const activeTeams = teamList.filter((team) => (countByTeam[team.id] || 0) > 0)
+  const emptyTeams = teamList.filter((team) => !(countByTeam[team.id] || 0))
+  const activeTeamIds = activeTeams.map((team) => team.id)
+  const activePlayerCount = activeTeams.reduce((sum, team) => sum + (countByTeam[team.id] || 0), 0)
+  const count = activeTeams.length
+  const eligible = (count === 4 || count === 5) && activePlayerCount >= CUP_MIN_PLAYERS
+  let reason = ''
+  if (!eligible) {
+    if (count === 6) {
+      reason = '当前有 6 支非空队伍，不支持一键开启界龙杯（仅支持 4 队或 5 队）；开赛前 2 小时起支持手动记录轮次比分与个人数据，无积分榜'
+    } else {
+      reason = `开启界龙杯需满足：非空队伍数为 4 或 5 支（当前 ${count} 支），且队内总人数不少于 ${CUP_MIN_PLAYERS} 人（当前 ${activePlayerCount} 人）`
+    }
+  }
+  return {
+    activeTeams,
+    activeTeamIds,
+    emptyTeams,
+    activePlayerCount,
+    pendingCount,
+    eligible,
+    reason
+  }
+}
+
+function isCupTeamsDrifted(cupTeamIds, activeTeamIds) {
+  if (!Array.isArray(cupTeamIds) || !cupTeamIds.length) return false
+  const current = Array.isArray(activeTeamIds) ? activeTeamIds : []
+  if (cupTeamIds.length !== current.length) return true
+  const set = new Set(current)
+  return cupTeamIds.some((id) => !set.has(id))
 }
 
 function rankTeams(groupIds, matches, tiebreakOrder) {
@@ -347,9 +558,19 @@ function finalsForFour(groupIds, matches, tiebreakOrder) {
   if (groupMatches.some((match) => match.scoreA == null || match.scoreB == null)) return []
   const table = rankTeams(groupIds, groupMatches, tiebreakOrder)
   if (table.some((row) => row.tied) && !(tiebreakOrder || []).length) return []
+  const counts = pitchCounts(groupMatches)
+  const finalHasTwoPlus = (counts[table[0].id] || 0) >= 2 || (counts[table[1].id] || 0) >= 2
+  const thirdHasTwoPlus = (counts[table[2].id] || 0) >= 2 || (counts[table[3].id] || 0) >= 2
+  let finalPitch = 'pitch_1'
+  let thirdPitch = 'pitch_2'
+  // 小组赛已在 1 号场踢过 ≥2 场的队伍默认让出 1 号场，去 2 号场
+  if (finalHasTwoPlus && !thirdHasTwoPlus) {
+    finalPitch = 'pitch_2'
+    thirdPitch = 'pitch_1'
+  }
   return [
-    matchRow(4, 'pitch_1', table[0].id, table[1].id, 'final'),
-    matchRow(4, 'pitch_2', table[2].id, table[3].id, 'third')
+    matchRow(4, finalPitch, table[0].id, table[1].id, 'final'),
+    matchRow(4, thirdPitch, table[2].id, table[3].id, 'third')
   ]
 }
 
@@ -412,23 +633,36 @@ module.exports = {
   SESSION_TEAM_STYLES,
   CLUB_SEEDS,
   clubSeed,
+  pigeonCutoffHours,
+  remindBeforeHours,
+  remindLeadMs,
   weekdayName,
   formatKickoff,
   membershipView,
   withWednesdayGroup,
   withClubMembership,
+  hasClubProfile,
+  buildProfileUpdate,
   renameGroup,
   recolorGroup,
   reorderGroups,
   normalizeTargetSize,
   normalizeTeamCount,
   buildSessionTeams,
+  sessionTeamSlot,
+  expandSessionTeams,
+  autoSessionPlacement,
   dividePlayers,
+  divideByRosterGroups,
   placeInPool,
   assertAdminMove,
   rosterLocked,
+  shuffleIds,
   cupFixtures,
   shouldAutoFixture,
+  CUP_MIN_PLAYERS,
+  evaluateJielongCup,
+  isCupTeamsDrifted,
   rankTeams,
   finalsForFour,
   pitchCounts,

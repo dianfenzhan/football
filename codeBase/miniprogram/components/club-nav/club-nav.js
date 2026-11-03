@@ -24,8 +24,23 @@ function measureChrome() {
   }
 }
 
+function withShortName(item) {
+  const id = item && item.id
+  let shortName = item.name
+  if (id === 'all') shortName = '全部'
+  else if (id === 'club_wednesday') shortName = '周三联'
+  else if (id === 'club_jielong') shortName = '界龙'
+  return Object.assign({}, item, { shortName })
+}
+
+function labelOf(options, value) {
+  const hit = (options || []).find((item) => item.id === value)
+  return (hit && (hit.shortName || hit.name)) || '全部'
+}
+
 Component({
   properties: {
+    title: { type: String, value: '球队' },
     showBack: { type: Boolean, value: false },
     bg: { type: String, value: '#0f3d2e' },
     color: { type: String, value: '#ffffff' }
@@ -37,9 +52,9 @@ Component({
     capsuleGap: 96,
     options: [],
     value: '',
-    title: '加载中',
+    currentLabel: '全部',
     canSwitch: false,
-    showSheet: false,
+    showMenu: false,
     clubs: []
   },
   lifetimes: {
@@ -54,6 +69,7 @@ Component({
   },
   pageLifetimes: {
     show() {
+      this.setData({ showMenu: false })
       this.refreshClubs()
     }
   },
@@ -71,40 +87,39 @@ Component({
       callQuiet('orgMe').then((org) => {
         applyWithProfile((org && org.clubs) || [], true)
       }).catch(() => {
-        // 旧云函数没有 orgMe：用 me 推断周三联
         applyWithProfile([], false)
       })
     },
     applyClubs(clubs) {
-      const options = clubContext.filterOptions(clubs)
+      const options = clubContext.filterOptions(clubs).map(withShortName)
       const value = clubContext.resolveFilter(clubs)
-      this.setData({
+      const canSwitch = options.length > 1
+      const chrome = measureChrome()
+      // 多队时绿顶栏下加一行隐蔽队名，标题字号保持不变
+      if (canSwitch) chrome.totalHeight += 26
+      this.setData(Object.assign({
         clubs,
         options,
         value,
-        canSwitch: options.length > 1,
-        title: clubContext.clubLabel(value)
-      })
-    },
-    openSheet() {
-      if (!this.data.canSwitch) return
-      const value = clubContext.resolveFilter(this.data.clubs)
-      this.setData({
-        showSheet: true,
-        value,
-        title: clubContext.clubLabel(value),
-        options: clubContext.filterOptions(this.data.clubs)
-      })
-    },
-    closeSheet() {
-      this.setData({ showSheet: false })
+        currentLabel: labelOf(options, value),
+        canSwitch,
+        showMenu: false
+      }, chrome))
     },
     onBack() {
+      this.setData({ showMenu: false })
       wx.navigateBack({
         fail: () => {
           wx.reLaunch({ url: '/pages/home/home' })
         }
       })
+    },
+    onTitleTap() {
+      if (!this.data.canSwitch) return
+      this.setData({ showMenu: !this.data.showMenu })
+    },
+    closeMenu() {
+      this.setData({ showMenu: false })
     },
     onPick(event) {
       const clubId = event.currentTarget.dataset.id
@@ -113,9 +128,9 @@ Component({
       if (!allowed) return
       const value = clubContext.writeFilter(clubId)
       this.setData({
-        showSheet: false,
         value,
-        title: clubContext.clubLabel(value)
+        currentLabel: labelOf(this.data.options, value),
+        showMenu: false
       })
       this.triggerEvent('change', { clubId: value })
     }

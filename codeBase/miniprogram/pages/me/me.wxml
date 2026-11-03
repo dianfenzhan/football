@@ -14,7 +14,7 @@
         bindblur="onNameBlur"
         bindconfirm="onNameBlur"
         placeholder="填写昵称"
-        maxlength="20"
+        maxlength="16"
       />
       <view class="role-line" wx:if="{{roleHint}}">{{roleHint}}</view>
       <view class="sync-line" wx:if="{{saving}}">正在同步…</view>
@@ -31,6 +31,34 @@
           data-id="{{item.id}}"
           bindtap="onPosition"
         >{{item.label}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="my-stats">
+    <view class="stats-title-row">
+      <view class="title">运动数据</view>
+    </view>
+    <view class="stats-grid">
+      <view class="stat-item">
+        <view class="stat-value">{{myStats.activities}}</view>
+        <view class="stat-label">总活动数</view>
+      </view>
+      <view class="stat-item">
+        <view class="stat-value">{{myStats.goals}}</view>
+        <view class="stat-label">总进球数</view>
+      </view>
+      <view class="stat-item">
+        <view class="stat-value">{{myStats.assists}}</view>
+        <view class="stat-label">总助攻数</view>
+      </view>
+      <view class="stat-item">
+        <view class="stat-value">{{myStats.ownGoals}}</view>
+        <view class="stat-label">总乌龙球数</view>
+      </view>
+      <view class="stat-item">
+        <view class="stat-value">{{myStats.absences}}</view>
+        <view class="stat-label">总鸽子数</view>
       </view>
     </view>
   </view>
@@ -104,5 +132,4 @@
   </view>
 
   <nav current="me" />
-  <mirror />
 </view>

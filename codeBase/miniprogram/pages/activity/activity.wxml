@@ -1,10 +1,10 @@
 <view class="page" wx:if="{{activity}}">
   <view wx:if="{{!closed}}" class="top-stick">
-    <block wx:if="{{!me}}">
+    <block wx:if="{{!wednesdayJoined && !signed && !waiting}}">
       <view class="top-actions">
         <button class="btn hero" bindtap="openRegister">⚽️ 立即报名</button>
       </view>
-      <view class="muted top-note">点上方按钮，一键微信注册即报名</view>
+      <view class="muted top-note">点上方按钮，完善信息即刻报名</view>
     </block>
     <block wx:else>
       <view wx:if="{{myPigeon}}" class="signed-banner">
@@ -17,7 +17,7 @@
         <view class="signed-banner">
           <text class="signed-text">{{waitBanner}}</text>
           <view class="banner-actions">
-            <view class="banner-btn" hover-class="banner-btn-hover" hover-stay-time="80" bindtap="changeWait">修改补位时间</view>
+            <view class="banner-btn" hover-class="banner-btn-hover" hover-stay-time="80" bindtap="changeWait">修改补位截止时间</view>
             <view class="banner-btn danger" hover-class="banner-btn-hover" hover-stay-time="80" bindtap="cancel">取消后补</view>
           </view>
         </view>
@@ -59,6 +59,7 @@
         <view>对调：请找管理员</view>
       </block>
     </view>
+    <view wx:elif="{{me && me.isAdmin && !closed && !quotaLocked}}" class="muted roster-tip">点每队人数上限数字，可改名额</view>
     <view
       class="roster {{joint ? 'joint' : 'split'}} {{draggingId ? 'is-dragging' : ''}}"
       bindtouchmove="onRosterTouchMove"
@@ -137,7 +138,10 @@
     </view>
     <view wx:if="{{pigeons.length}}" class="pigeon-block">
       <view class="pigeon-title">🐦 本场鸽子</view>
-      <view wx:for="{{pigeons}}" wx:key="playerOpenid" class="pigeon-line">{{item.userName}}</view>
+      <view wx:for="{{pigeons}}" wx:key="playerOpenid" class="pigeon-line">
+        <text>{{item.userName}}</text>
+        <text wx:if="{{me && me.isAdmin && item._id}}" class="tiny danger" style="margin-left: 16rpx;" data-id="{{item._id}}" data-name="{{item.userName}}" catchtap="askDeleteRecord">删除</text>
+      </view>
     </view>
   </view>
 
@@ -148,7 +152,10 @@
   >
     <view class="tactics-head">
       <view class="title">战术板 · {{tacticsTeamName || '本队'}}</view>
-      <view class="tactics-badge">8人</view>
+      <view class="tactics-badges">
+        <view class="tactics-badge">{{tacticsBoard.pitchBadgeText || '上场 0/9'}}</view>
+        <view wx:if="{{!canEditTactics}}" class="tactics-badge muted-badge">仅本队可改</view>
+      </view>
     </view>
     <view class="reg-teams tactics-team-tabs">
       <view
@@ -159,7 +166,6 @@
         bindtap="switchTacticsTeam"
       >{{item.teamName}}</view>
     </view>
-    <view class="muted tactics-tip">{{canEditTactics ? '正选出勤前 8 上场，其余在轮换；拖到轮换区下场。本场正选可改任意队' : '正选出勤前 8 上场，其余在轮换；仅本场正选可改阵容'}}</view>
     <view wx:if="{{tacticsRemovedNotice}}" class="tactics-notice">{{tacticsRemovedNotice}}</view>
 
     <view id="tacticsPitch" class="tactics-pitch">
@@ -168,18 +174,6 @@
         <view class="pitch-midline"></view>
         <view class="pitch-circle"></view>
         <view class="pitch-box-bottom"></view>
-      </view>
-
-      <view
-        wx:for="{{tacticsBoard.emptySlots}}"
-        wx:key="index"
-        class="pitch-free-slot is-empty"
-        style="left: {{item.x * 100}}%; top: {{item.y * 100}}%;"
-      >
-        <view class="pitch-avatar-wrap">
-          <view class="pitch-avatar pitch-avatar-empty">{{item.role === 'gk' ? item.shortLabel : ''}}</view>
-        </view>
-        <view class="pitch-name empty">{{item.emptyText}}</view>
       </view>
 
       <view
@@ -217,9 +211,10 @@
 
     <view id="tacticsBench" class="tactics-bench {{tacticsDragPreviewActive ? 'drop-target' : ''}}">
       <view class="bench-head">
-        <view class="bench-title">轮换（{{tacticsBoard.bench.length}}人）</view>
+        <view class="bench-title">候选池（{{tacticsBoard.bench.length}}人）</view>
+        <text wx:if="{{canEditTactics}}" class="bench-hint">拖上场 · 拖下场</text>
       </view>
-      <view wx:if="{{!tacticsBoard.bench.length}}" class="bench-empty-drop">拖到这里下场 / 暂无轮换球员</view>
+      <view wx:if="{{!tacticsBoard.bench.length}}" class="bench-empty-drop">拖到这里下场</view>
       <view wx:else class="bench-list">
         <view
           wx:for="{{tacticsBoard.bench}}"
@@ -288,6 +283,12 @@
         </picker>
       </view>
       <view class="field">
+        <text class="label">🥅 乌龙球</text>
+        <picker mode="selector" range="{{statOptions}}" value="{{ownGoalIndex}}" bindchange="onEditOwnGoals">
+          <view class="picker-value">{{statOptions[ownGoalIndex]}}</view>
+        </picker>
+      </view>
+      <view class="field">
         <text class="label">出勤情况</text>
         <picker mode="selector" range="{{pigeonOptions}}" value="{{pigeonIndex}}" bindchange="onEditAbsent">
           <view class="picker-value">{{pigeonOptions[pigeonIndex]}}</view>
@@ -301,7 +302,7 @@
     <view class="title">本场数据</view>
     <view wx:if="{{records.length === 0}}" class="muted">还没有记录</view>
     <view class="swipe" wx:for="{{records}}" wx:key="playerOpenid">
-      <view wx:if="{{me && me.isAdmin && item.editable}}" class="swipe-delete" data-id="{{item._id}}" data-name="{{item.userName}}" catchtap="askDeleteRecord">删除</view>
+      <view wx:if="{{me && me.isAdmin && item.deletable}}" class="swipe-delete" data-id="{{item._id}}" data-name="{{item.userName}}" catchtap="askDeleteRecord">删除</view>
       <view
         class="swipe-row {{item.dragging ? 'dragging' : ''}}"
         style="{{item.offset ? 'transform: translateX(' + item.offset + 'px);' : ''}}"
@@ -323,11 +324,14 @@
           <picker mode="selector" range="{{statOptions}}" value="{{item.assistIndex}}" data-openid="{{item.playerOpenid}}" bindchange="onRowAssists">
             <text>👟 <text class="quota-num">{{item.assists}}</text></text>
           </picker>
+          <picker mode="selector" range="{{statOptions}}" value="{{item.ownGoalIndex}}" data-openid="{{item.playerOpenid}}" bindchange="onRowOwnGoals">
+            <text>🥅 <text class="quota-num">{{item.ownGoals || 0}}</text></text>
+          </picker>
           <picker mode="selector" range="{{pigeonOptions}}" value="{{item.pigeonIndex}}" data-openid="{{item.playerOpenid}}" bindchange="onRowAbsent">
             <text class="quota-num">{{item.absent ? '🐦' : '正常'}}</text>
           </picker>
         </view>
-        <view wx:else class="muted">⚽️ {{item.goals}} · 👟 {{item.assists}} · {{item.absent ? '🐦' : '正常'}}</view>
+        <view wx:else class="muted">⚽️ {{item.goals}} · 👟 {{item.assists}} · 🥅 {{item.ownGoals || 0}} · {{item.absent ? '🐦' : '正常'}}</view>
       </view>
     </view>
   </view>
@@ -365,18 +369,30 @@
 
   <view wx:if="{{showRegister}}" class="share-mask" catchtouchmove="noop">
     <view class="share-sheet">
-      <view class="title">一键注册并报名</view>
+      <view class="title">{{me && me.name ? '加入周三联并报名' : '一键注册并报名'}}</view>
       <view class="reg-avatar-row">
         <button class="avatar-chooser" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar">
           <image wx:if="{{regAvatarUrl}}" class="avatar-img" src="{{regAvatarUrl}}" mode="aspectFill"/>
           <text wx:else class="avatar-plus">+</text>
         </button>
-        <view class="muted">点头像，选微信头像</view>
+        <view class="muted">点头像，选微信头像（选填）</view>
       </view>
-      <input type="nickname" class="input reg-input" placeholder="点这里快捷填入微信昵称" value="{{regName}}" bindinput="onRegName"/>
+      <view class="reg-field-label">昵称（必填）</view>
+      <input type="nickname" class="input reg-input" placeholder="点这里快捷填入微信昵称" value="{{regName}}" maxlength="16" bindinput="onRegName"/>
+      <view class="reg-field-label">擅长位置（选填）</view>
+      <view class="reg-positions">
+        <view
+          wx:for="{{positions}}"
+          wx:key="id"
+          class="reg-pos {{regPosition === item.id ? 'active' : ''}}"
+          data-id="{{item.id}}"
+          bindtap="onRegPosition"
+        >{{item.label}}</view>
+      </view>
+      <view class="reg-field-label">所属分组（必选）</view>
       <view class="reg-teams">
         <view
-          wx:for="{{teams}}"
+          wx:for="{{regTeams}}"
           wx:key="_id"
           class="reg-team {{regTeamId === item._id ? 'active' : ''}}"
           data-team="{{item._id}}"
@@ -400,7 +416,7 @@
 
   <view wx:if="{{showWaitHours}}" class="share-mask" catchtouchmove="noop">
     <view class="share-sheet">
-      <view class="title">后补守到什么时候</view>
+      <view class="title">补位截止时间</view>
       <scroll-view class="wait-hour-list" scroll-y scroll-into-view="{{waitHourInto}}">
         <view
           wx:for="{{waitHourOptions}}"
@@ -430,7 +446,6 @@
   </view>
 
   <nav current="activities" />
-  <mirror />
 </view>
 
 <view wx:if="{{loadFailed}}" class="page">
@@ -440,5 +455,4 @@
     <view class="muted">链接可能已失效，找队友要个新链接吧</view>
   </view>
   <nav current="activities" />
-  <mirror />
 </view>

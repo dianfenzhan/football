@@ -32,7 +32,8 @@ const LINE_GROUPS = [
   [7]
 ]
 
-const MAX_ON_PITCH = 8
+const DEFAULT_ON_PITCH = 8
+const MAX_ON_PITCH = 9
 const SLOT_OCCUPIED_RADIUS = 0.14
 const PLAYER_HIT_RADIUS = 0.13
 
@@ -108,16 +109,8 @@ function nearestSlotRole(x, y, fallbackRole = 'mf') {
   return best ? best.role : normalizeRole(fallbackRole)
 }
 
-function computeEmptySlots(onPitch, emptyText = '待报名') {
-  const list = onPitch || []
-  if (list.length >= MAX_ON_PITCH) return []
-  return TACTICS_SLOTS.filter((slot) => {
-    const occupied = list.some((p) => distance2D(p.x, p.y, slot.x, slot.y) < SLOT_OCCUPIED_RADIUS)
-    return !occupied
-  }).map((slot) => ({
-    ...slot,
-    emptyText
-  }))
+function computeEmptySlots() {
+  return []
 }
 
 function decorateOnPitchItem(player, x, y, role) {
@@ -176,6 +169,7 @@ function buildStateFromPitchAndPool(onPitchRaw, allPoolRaw, options = {}) {
     bench,
     emptySlots,
     onPitchCount: onPitch.length,
+    pitchBadgeText: `上场 ${onPitch.length}/${MAX_ON_PITCH}`,
     slots,
     lines,
     items: onPitch.map((p) => p).concat(bench)
@@ -183,7 +177,7 @@ function buildStateFromPitchAndPool(onPitchRaw, allPoolRaw, options = {}) {
 }
 
 function assign322ByPosition(starters, randomFn = Math.random) {
-  const list = (starters || []).slice(0, MAX_ON_PITCH).map((p, i) => normalizePlayer(p, i)).filter(Boolean)
+  const list = (starters || []).slice(0, DEFAULT_ON_PITCH).map((p, i) => normalizePlayer(p, i)).filter(Boolean)
   const assignedBySlot = new Array(TACTICS_SLOTS.length).fill(null)
   const buckets = { fw: [], mf: [], df: [], gk: [] }
   for (const p of list) {
@@ -230,9 +224,9 @@ function assign322ByPosition(starters, randomFn = Math.random) {
 
 function buildDefaultTacticsState(players, options = {}) {
   const randomFn = options.randomFn || Math.random
-  const emptyText = options.emptyText || '待报名'
+  const emptyText = options.emptyText || ''
   const sorted = sortByAttendanceTop(players)
-  const starters = sorted.slice(0, MAX_ON_PITCH)
+  const starters = sorted.slice(0, DEFAULT_ON_PITCH)
   const onPitch = assign322ByPosition(starters, randomFn)
   return buildStateFromPitchAndPool(onPitch, sorted, { emptyText })
 }
@@ -338,7 +332,7 @@ function applyPitchDrag(state, allPool, payload, options = {}) {
       if (!hit) {
         return {
           state,
-          toast: '场上已满，先把一个人拖到轮换'
+          toast: '场上最多 9 人，先把一个人拖到候选池'
         }
       }
       const hitIdx = currentOnPitch.findIndex((p) => p.userId === hit.userId)
@@ -519,6 +513,7 @@ async function renderTacticsPoster(canvas, payload) {
     : truncateText(teamName || '球队战术板', 14)
   ctx.fillText(headerTitle, 20, 20)
 
+  const pitchModeText = `${onPitch.length > DEFAULT_ON_PITCH ? onPitch.length : DEFAULT_ON_PITCH}人制`
   const badgeW = 98
   const badgeH = 24
   const badgeX = W - 20 - badgeW
@@ -530,7 +525,7 @@ async function renderTacticsPoster(canvas, payload) {
   ctx.font = 'bold 12px sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('8人制', badgeX + badgeW / 2, badgeY + badgeH / 2)
+  ctx.fillText(pitchModeText, badgeX + badgeW / 2, badgeY + badgeH / 2)
 
   if (hasActivity) {
     ctx.textAlign = 'left'
@@ -716,7 +711,7 @@ async function renderTacticsPoster(canvas, payload) {
     ctx.font = 'bold 11px sans-serif'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
-    ctx.fillText(`轮换（${benchPlayers.length}人）`, bx + 12, by + 9)
+    ctx.fillText(`候选池（${benchPlayers.length}人）`, bx + 12, by + 9)
 
     const names = benchPlayers.map((p) => p.userName || p.name).join('、')
     ctx.fillStyle = '#e4f3eb'
@@ -724,11 +719,14 @@ async function renderTacticsPoster(canvas, payload) {
     ctx.fillText(truncateText(names, 26), bx + 12, by + 27)
   }
 
+  const clubFooterName = (activity && activity.clubId === 'club_jielong')
+    ? '界龙散客队'
+    : '周三快乐足球联队'
   ctx.fillStyle = 'rgba(183, 215, 200, 0.75)'
   ctx.font = '11px sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('周三快乐足球联队 · 8人制战术板', W / 2, H - 18)
+  ctx.fillText(`${clubFooterName} · ${pitchModeText}战术板`, W / 2, H - 18)
 
   ctx.restore()
   return { width: W * dpr, height: H * dpr }
@@ -739,6 +737,7 @@ module.exports = {
   POSITION_LABEL_MAP,
   TACTICS_SLOTS,
   LINE_GROUPS,
+  DEFAULT_ON_PITCH,
   MAX_ON_PITCH,
   SLOT_OCCUPIED_RADIUS,
   PLAYER_HIT_RADIUS,

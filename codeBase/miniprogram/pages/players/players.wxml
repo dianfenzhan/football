@@ -1,5 +1,5 @@
 <view class="page">
-  <club-nav bind:change="onFilterChange" />
+  <club-nav title="球员" bind:change="onFilterChange" />
 
   <view class="card">
     <view class="pills" wx:if="{{groupFilters.length}}">
@@ -11,7 +11,12 @@
         bindtap="onGroup"
       >{{item.name}}</view>
     </view>
-    <view class="muted admin-tip" wx:elif="{{canEditPlayers}}">管理员可点击队员修改昵称、头像和擅长位置。</view>
+    <view class="muted admin-tip" wx:if="{{canEditPlayers}}">
+      已展示本队运动数据；点队员可查看详情或改资料{{canGrantThisClub ? '，右侧开关可设管理员' : ''}}。
+    </view>
+    <view class="muted admin-tip" wx:elif="{{viewClubFilter === 'all'}}">
+      当前看全部球队。要查看本队运动数据、改资料或设管理员，请先切到具体球队。
+    </view>
     <view class="muted admin-tip" wx:else>当前筛选：{{clubFilterLabel}}</view>
   </view>
 
@@ -34,7 +39,14 @@
         <text wx:if="{{item.isCaptain}}" class="admin-tag">队长</text>
         <text wx:elif="{{item.clubAdminTag}}" class="admin-tag">{{item.clubAdminTag}}</text>
       </view>
-      <view class="muted sub" wx:if="{{item.metaText}}">{{item.metaText}}</view>
+      <view class="muted sub" wx:if="{{item.metaText && !item.currentClubStats}}">{{item.metaText}}</view>
+      <view class="player-stats-line" wx:if="{{canEditPlayers && item.currentClubStats}}">
+        <text class="ps-pill">总活动 {{item.currentClubStats.activities}}</text>
+        <text class="ps-pill">进球 {{item.currentClubStats.goals}}</text>
+        <text class="ps-pill">助攻 {{item.currentClubStats.assists}}</text>
+        <text class="ps-pill">乌龙 {{item.currentClubStats.ownGoals}}</text>
+        <text class="ps-pill">鸽子 {{item.currentClubStats.absences}}</text>
+      </view>
     </view>
     <view class="player-right" catchtap="noop">
       <text class="pos-badge">{{item.positionLabel}}</text>
@@ -64,9 +76,34 @@
         </button>
         <view class="muted">点击更换头像</view>
       </view>
+      <view class="field modal-stats-block">
+        <text class="label">本队运动数据（{{clubFilterLabel}}）</text>
+        <view class="modal-stats-grid">
+          <view class="modal-stat-item">
+            <view class="modal-stat-value">{{editPlayerStats.activities}}</view>
+            <view class="modal-stat-label">总活动数</view>
+          </view>
+          <view class="modal-stat-item">
+            <view class="modal-stat-value">{{editPlayerStats.goals}}</view>
+            <view class="modal-stat-label">总进球数</view>
+          </view>
+          <view class="modal-stat-item">
+            <view class="modal-stat-value">{{editPlayerStats.assists}}</view>
+            <view class="modal-stat-label">总助攻数</view>
+          </view>
+          <view class="modal-stat-item">
+            <view class="modal-stat-value">{{editPlayerStats.ownGoals}}</view>
+            <view class="modal-stat-label">总乌龙球数</view>
+          </view>
+          <view class="modal-stat-item">
+            <view class="modal-stat-value">{{editPlayerStats.absences}}</view>
+            <view class="modal-stat-label">总鸽子数</view>
+          </view>
+        </view>
+      </view>
       <view class="field">
         <text class="label">昵称</text>
-        <input class="input" value="{{editName}}" bindinput="onEditName" placeholder="队员昵称" />
+        <input class="input" value="{{editName}}" maxlength="16" bindinput="onEditName" placeholder="队员昵称" />
       </view>
       <view class="field">
         <text class="label">擅长位置</text>
@@ -95,5 +132,4 @@
   </view>
 
   <nav current="players" />
-  <mirror />
 </view>

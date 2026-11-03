@@ -3,34 +3,36 @@
     <view class="bar" style="height: {{navBarHeight}}px;">
       <view wx:if="{{showBack}}" class="side left" bindtap="onBack">‹</view>
       <view wx:else class="side left"></view>
-      <view wx:if="{{canSwitch}}" class="title-wrap" bindtap="openSheet">
-        <text class="title" style="color: {{color}};">{{title}}</text>
-        <text class="chev" style="color: {{color}};">▾</text>
-      </view>
-      <view wx:else class="title-wrap locked">
+      <view class="title-wrap">
         <text class="title" style="color: {{color}};">{{title}}</text>
       </view>
       <view class="side right" style="width: {{capsuleGap}}px;"></view>
     </view>
+    <view
+      wx:if="{{canSwitch}}"
+      class="club-trigger"
+      style="color: {{color}};"
+      bindtap="onTitleTap"
+    >
+      <text class="club-label">{{currentLabel}}</text>
+      <text class="chev">{{showMenu ? '▴' : '▾'}}</text>
+    </view>
   </view>
   <view class="spacer" style="height: {{totalHeight}}px;"></view>
 
-  <view class="sheet" wx:if="{{showSheet}}" catchtouchmove="noop">
-    <view class="mask" bindtap="closeSheet"></view>
-    <view class="body">
-      <view class="sheet-title">切换球队</view>
-      <view class="sheet-sub">只显示你已加入的球队</view>
+  <view class="menu-layer" wx:if="{{showMenu}}" catchtouchmove="noop">
+    <view class="menu-mask" bindtap="closeMenu"></view>
+    <view class="menu" style="top: {{totalHeight}}px;">
       <view
         wx:for="{{options}}"
         wx:key="id"
-        class="row {{value === item.id ? 'on' : ''}}"
+        class="menu-item {{value === item.id ? 'on' : ''}}"
         data-id="{{item.id}}"
         bindtap="onPick"
       >
-        <view class="row-name">{{item.name}}</view>
-        <text class="badge" wx:if="{{value === item.id}}">当前</text>
+        <text>{{item.shortName || item.name}}</text>
+        <text wx:if="{{value === item.id}}" class="tick">✓</text>
       </view>
-      <view class="cancel" bindtap="closeSheet">取消</view>
     </view>
   </view>
 </view>

@@ -90,6 +90,12 @@ async function main() {
 
   try {
     const me0 = assertOk('me', await callApi(miniProgram, 'me'))
+    if (!me0.myStats || typeof me0.myStats.activities !== 'number' || typeof me0.myStats.goals !== 'number'
+      || typeof me0.myStats.assists !== 'number' || typeof me0.myStats.ownGoals !== 'number'
+      || typeof me0.myStats.absences !== 'number') {
+      throw new Error('me: myStats shape invalid')
+    }
+    pass('me myStats')
     let user = me0.user
     if (!user) {
       const saved = assertOk('saveProfile', await callApi(miniProgram, 'saveProfile', {
@@ -106,6 +112,10 @@ async function main() {
       name: '',
       teamId: user.teamId
     }))
+    assertFail('saveProfile name too long', await callApi(miniProgram, 'saveProfile', {
+      name: '一二三四五六七八九十一二三四五六七',
+      teamId: user.teamId
+    }))
     assertFail('saveProfile bad team', await callApi(miniProgram, 'saveProfile', {
       name: user.name,
       teamId: 'team_ghost'
@@ -114,6 +124,15 @@ async function main() {
       name: user.name,
       teamId: user.teamId,
       preferredPosition: 'striker'
+    }))
+    assertFail('saveProfile bad jielong group', await callApi(miniProgram, 'saveProfile', {
+      name: user.name,
+      clubId: 'club_jielong',
+      groupId: 'jl_ghost'
+    }))
+    assertOk('saveProfile personal only', await callApi(miniProgram, 'saveProfile', {
+      name: user.name,
+      preferredPosition: user.preferredPosition || 'mf'
     }))
 
     const members = await callApi(miniProgram, 'listMembers')
@@ -131,8 +150,14 @@ async function main() {
       idx === 0 || (playerList[idx - 1].createdAt || 0) >= (item.createdAt || 0)
     ))
     if (!sortedDesc) throw new Error('listPlayers: not sorted by createdAt desc')
-    if (!playerList.some((item) => item._id === user._id)) throw new Error('listPlayers: current user missing')
+    const meInPlayers = playerList.find((item) => item._id === user._id)
+    if (!meInPlayers) throw new Error('listPlayers: current user missing')
+    if (!meInPlayers.clubStats || !meInPlayers.clubStats.club_wednesday
+      || typeof meInPlayers.clubStats.club_wednesday.activities !== 'number') {
+      throw new Error('listPlayers: admin missing clubStats')
+    }
     pass('listPlayers sorted desc')
+    pass('listPlayers admin clubStats')
 
     const openid = user._openid
     const otherTeamId = user.teamId === 'team_jiong' ? 'team_pudong' : 'team_jiong'
@@ -638,7 +663,16 @@ async function main() {
       || !Array.isArray(home.absencesTop)) {
       throw new Error('homeSummary: missing top lists')
     }
+    if (home.absencesAdminOnly !== true) {
+      throw new Error('homeSummary: absencesAdminOnly should be true')
+    }
     pass('homeSummary shape')
+
+    // Dual-club leftover filter (e.g. club_jielong) can hide the smoke activity on home.
+    await miniProgram.evaluate(() => {
+      wx.setStorageSync('viewClubFilter', 'all')
+      try { wx.removeStorageSync('currentClubId') } catch (e) { /* ignore */ }
+    })
 
     // Weather is fetched on the client (cloud function timeout is stuck at 3s).
     const weatherPage = await miniProgram.reLaunch('/pages/home/home')
@@ -706,12 +740,11 @@ async function main() {
     }))
     assertFail('cancelSignup again', await callApi(miniProgram, 'cancelSignup', { activityId }))
 
-    const homeUnsigned = assertOk('homeSummary signedUp false', await callApi(miniProgram, 'homeSummary'))
-    if (homeUnsigned.nextActivity && homeUnsigned.nextActivity._id === activityId
-      && homeUnsigned.nextActivity.signedUp !== false) {
-      throw new Error('homeSummary: nextActivity.signedUp not false after cancel')
+    const homeUnsigned = assertOk('homeSummary after cancel no next', await callApi(miniProgram, 'homeSummary'))
+    if (homeUnsigned.nextActivity && homeUnsigned.nextActivity._id === activityId) {
+      throw new Error('homeSummary: cancelled activity still shown as nextActivity')
     }
-    pass('homeSummary signedUp false')
+    pass('homeSummary after cancel no next')
 
     assertFail('signup invalid team', await callApi(miniProgram, 'signup', {
       activityId,
@@ -755,9 +788,9 @@ async function main() {
     }
     pass('saveProfile keeps signup team')
 
-    // 正选可改任意队战术板：当前报在 otherTeam，仍可保存主队板
+    // 正选可改任意队战术板：当前报在 otherTeam，仍可保存主队板（最多 9 人，10 人拒绝）
     const tooManySlots = []
-    for (let i = 0; i < 9; i += 1) {
+    for (let i = 0; i < 10; i += 1) {
       tooManySlots.push({ userId: 'smoke_slot_' + i, x: 0.5, y: 0.5, role: 'mf' })
     }
     assertFail('saveTacticsBoard too many', await callApi(miniProgram, 'saveTacticsBoard', {
@@ -769,68 +802,18 @@ async function main() {
     assertOk('saveTacticsBoard activity', await callApi(miniProgram, 'saveTacticsBoard', {
       scope: 'activity',
       activityId,
-      teamId: user.teamId,
+      teamId: otherTeamId,
       slots: [{ userId: user._id, x: 0.5, y: 0.87, role: 'gk' }]
     }))
     const detailWithBoard = assertOk('activityDetail with activityBoards', await callApi(miniProgram, 'activityDetail', {
       activityId
     }))
-    if (!detailWithBoard.activityBoards || !detailWithBoard.activityBoards[user.teamId]) {
+    if (!detailWithBoard.activityBoards || !detailWithBoard.activityBoards[otherTeamId]) {
       throw new Error('activityDetail: missing saved activityBoard')
     }
     pass('activity tactics board saved')
 
     assertOk('cancelSignup after other team', await callApi(miniProgram, 'cancelSignup', { activityId }))
-
-    const mirrorFaq = assertOk('mirrorAsk faq pigeon', await callApi(miniProgram, 'mirrorAsk', {
-      question: '取消报名会记鸽子吗'
-    }))
-    if (!mirrorFaq.answer || !/鸽子|4 小时|4小时/.test(mirrorFaq.answer)) {
-      throw new Error('mirrorAsk faq: unexpected answer')
-    }
-    if (mirrorFaq.usedModel) throw new Error('mirrorAsk faq: should not use model')
-    if (mirrorFaq.hitId !== 'signup-cancel-pigeon') {
-      throw new Error('mirrorAsk faq: hitId expected signup-cancel-pigeon got ' + mirrorFaq.hitId)
-    }
-    pass('mirrorAsk faq pigeon')
-
-    const mirrorNext = assertOk('mirrorAsk live next', await callApi(miniProgram, 'mirrorAsk', {
-      question: '下一场什么时候'
-    }))
-    if (!mirrorNext.answer) throw new Error('mirrorAsk live next: empty answer')
-    if (mirrorNext.usedModel) throw new Error('mirrorAsk live next: should not use model')
-    pass('mirrorAsk live next')
-
-    const quotaBeforeModel = assertOk('mirrorQuota before model', await callApi(miniProgram, 'mirrorQuota'))
-    const mirrorModel = assertOk('mirrorAsk model path', await callApi(miniProgram, 'mirrorAsk', {
-      question: '周三去不了咋整'
-    }))
-    if (!mirrorModel.answer) throw new Error('mirrorAsk model: empty answer')
-    // 未配置真实 DeepSeek key 或模型失败时允许兜底话术，且不计次
-    if (/暂未开通|开小差/.test(mirrorModel.answer)
-      && mirrorModel.remaining !== quotaBeforeModel.remaining) {
-      throw new Error('mirrorAsk model failure should not consume quota')
-    }
-    pass('mirrorAsk model path')
-
-    if (mirrorFaq.logId) {
-      assertOk('mirrorFeedback', await callApi(miniProgram, 'mirrorFeedback', {
-        logId: mirrorFaq.logId,
-        useful: true
-      }))
-    }
-
-    const mirrorQuota = assertOk('mirrorQuota', await callApi(miniProgram, 'mirrorQuota'))
-    const expectedWeekLimit = user.canGrantAdmin ? 100 : (user.isAdmin ? 50 : 15)
-    if (mirrorQuota.weekLimit !== expectedWeekLimit) {
-      throw new Error('mirrorQuota: weekLimit expected ' + expectedWeekLimit + ' got ' + mirrorQuota.weekLimit)
-    }
-    if (typeof mirrorQuota.remaining !== 'number'
-      || mirrorQuota.remaining < 0
-      || mirrorQuota.remaining > expectedWeekLimit) {
-      throw new Error('mirrorQuota: remaining out of range')
-    }
-    pass('mirrorQuota')
 
     assertFail('saveTacticsBoard unsigned', await callApi(miniProgram, 'saveTacticsBoard', {
       scope: 'activity',
@@ -871,7 +854,8 @@ async function main() {
     const jielong = (orgProfile.clubs || []).find((club) => club._id === 'club_jielong')
     const wednesday = (orgProfile.clubs || []).find((club) => club._id === 'club_wednesday')
     if (!jielong || !wednesday) throw new Error('orgMe: missing club')
-    if ((jielong.groups || []).length !== 0) throw new Error('orgMe: jielong should have no standing groups')
+    if (jielong.name !== '界龙散客队') throw new Error('orgMe: jielong name')
+    if ((jielong.groups || []).length !== 6) throw new Error('orgMe: jielong should have 6 roster groups')
     if ((jielong.signupModes || []).indexOf('pool') === -1) throw new Error('orgMe: jielong pool mode')
     pass('orgMe two clubs')
     if (jielong.role === 'owner' || jielong.role === 'admin') {
@@ -879,36 +863,200 @@ async function main() {
         clubId: 'club_jielong',
         title: '冒烟界龙',
         location: '界龙足球基地',
-        startTime: Date.now() + 7 * 24 * HOUR_MS,
-        maxSignedPlayers: 40
+        startTime: Date.now() + 7 * 24 * HOUR_MS
       }))
       track(activityIds, created.activityId)
       const signed = assertOk('signup jielong', await callApi(miniProgram, 'signup', {
         activityId: created.activityId
       }))
-      if (!signed.signed || signed.teamId !== 'team_pending') throw new Error('signup jielong: expected pending pool')
+      // 报名即自动入队：第 1 人进第 1 队
+      if (!signed.signed || signed.teamId !== 'sess_a') {
+        throw new Error('signup jielong: expected sess_a, got ' + (signed.teamId || ''))
+      }
       pass('signup jielong placed')
-      assertOk('smokeSeedSignups jielong', await callApi(miniProgram, 'smokeSeedSignups', {
+      // 再灌 30 人 → 共 31，自动扩到 4 队（8/8/8/7）
+      const seeded = assertOk('smokeSeedSignups jielong', await callApi(miniProgram, 'smokeSeedSignups', {
         activityId: created.activityId,
         teamId: 'team_pending',
         status: 'signed',
         count: 30
       }))
-      const divided = assertOk('assignTeams', await callApi(miniProgram, 'assignTeams', {
-        activityId: created.activityId,
-        teamCount: 4,
-        targetPerTeam: 8
+      if (seeded.teamCount !== 4) throw new Error('smokeSeedSignups jielong: expected 4 teams, got ' + seeded.teamCount)
+      const detailAuto = assertOk('activityDetail jielong auto', await callApi(miniProgram, 'activityDetail', {
+        activityId: created.activityId
       }))
-      // 本人 + 30 假人 = 31，按每队 8 尽量匀成 8/8/8/7
+      if (!detailAuto.activity || !detailAuto.activity.divided) throw new Error('activityDetail jielong: not divided')
+      if ((detailAuto.activity.teams || []).length !== 4) {
+        throw new Error('auto teams: expected 4, got ' + (detailAuto.activity.teams || []).length)
+      }
+      pass('auto teams by eight')
+      const divided = assertOk('assignTeams by roster', await callApi(miniProgram, 'assignTeams', {
+        activityId: created.activityId
+      }))
+      if (divided.teamCount !== 6) throw new Error('assignTeams: expected 6 roster teams, got ' + divided.teamCount)
       if (divided.assignedCount !== 31) throw new Error('assignTeams: expected 31 assigned, got ' + divided.assignedCount)
-      if (divided.fixtureCount !== 6) throw new Error('assignTeams: expected 6 fixtures, got ' + divided.fixtureCount)
-      pass('assignTeams four by eight')
+      if (divided.fixtureCount !== 0) throw new Error('assignTeams: expected 0 auto fixtures for 6 teams, got ' + divided.fixtureCount)
+      pass('assignTeams by roster six')
+      // 管理员分队后，新报名进「未分队」池（team_pending）
+      assertOk('smokeSeedSignups jielong after manual', await callApi(miniProgram, 'smokeSeedSignups', {
+        activityId: created.activityId,
+        teamId: 'auto',
+        status: 'signed',
+        count: 2
+      }))
       const detail = assertOk('activityDetail jielong', await callApi(miniProgram, 'activityDetail', {
         activityId: created.activityId
       }))
-      if (!detail.activity || !detail.activity.divided) throw new Error('activityDetail jielong: not divided')
-      if ((detail.rounds || []).length !== 6) throw new Error('activityDetail jielong: rounds')
+      if (!detail.activity || !detail.activity.divided || !detail.activity.manualRoster) {
+        throw new Error('activityDetail jielong: not divided or manualRoster not set')
+      }
+      const pendingAfterManual = (detail.signups || []).filter((row) => row.status === 'signed' && row.teamId === 'team_pending')
+      if (pendingAfterManual.length !== 2) {
+        throw new Error('jielong manualRoster: expected 2 pending signups, got ' + pendingAfterManual.length)
+      }
+      if ((detail.rounds || []).length !== 0) throw new Error('activityDetail jielong: 6 teams should start with 0 auto rounds')
       pass('activityDetail divided')
+      // 6 队手动添加、删除场次
+      const manualFixture = assertOk('addFixture manual', await callApi(miniProgram, 'addFixture', {
+        activityId: created.activityId,
+        roundNo: 1,
+        pitchId: 'pitch_1',
+        teamAId: 'sess_a',
+        teamBId: 'sess_b'
+      }))
+      if (!manualFixture.roundId) throw new Error('addFixture: missing roundId')
+      pass('addFixture manual')
+      assertOk('deleteFixture manual', await callApi(miniProgram, 'deleteFixture', {
+        roundId: manualFixture.roundId
+      }))
+      pass('deleteFixture manual')
+      // 删中间轮次后，后续 roundNo 前移
+      assertOk('addFixture round1 for renumber', await callApi(miniProgram, 'addFixture', {
+        activityId: created.activityId,
+        roundNo: 1,
+        pitchId: 'pitch_1',
+        teamAId: 'sess_a',
+        teamBId: 'sess_b'
+      }))
+      assertOk('addFixture round2 for renumber', await callApi(miniProgram, 'addFixture', {
+        activityId: created.activityId,
+        roundNo: 2,
+        pitchId: 'pitch_1',
+        teamAId: 'sess_c',
+        teamBId: 'sess_d'
+      }))
+      assertOk('addFixture round3 for renumber', await callApi(miniProgram, 'addFixture', {
+        activityId: created.activityId,
+        roundNo: 3,
+        pitchId: 'pitch_1',
+        teamAId: 'sess_e',
+        teamBId: 'sess_f'
+      }))
+      const deletedDir = assertOk('deleteRoundDirectory middle', await callApi(miniProgram, 'deleteRoundDirectory', {
+        activityId: created.activityId,
+        roundNo: 2
+      }))
+      if (deletedDir.renumbered !== 1) {
+        throw new Error('deleteRoundDirectory: expected renumbered=1, got ' + deletedDir.renumbered)
+      }
+      const afterRenumber = assertOk('activityDetail after deleteRoundDirectory', await callApi(miniProgram, 'activityDetail', {
+        activityId: created.activityId
+      }))
+      const renumberNos = (afterRenumber.rounds || []).map((row) => row.roundNo).sort((a, b) => a - b)
+      if (renumberNos.join(',') !== '1,2') {
+        throw new Error('deleteRoundDirectory: expected roundNos 1,2 after deleting middle, got ' + renumberNos.join(','))
+      }
+      pass('deleteRoundDirectory renumber')
+      for (const row of afterRenumber.rounds || []) {
+        assertOk('deleteFixture after renumber', await callApi(miniProgram, 'deleteFixture', {
+          roundId: row._id || row.roundId
+        }))
+      }
+      // 6 队已满，不能再加
+      assertFail('addSessionTeam full', await callApi(miniProgram, 'addSessionTeam', {
+        activityId: created.activityId
+      }))
+      // 假人无名册组，一键分队后大多在最后一队；有人的队不可删，空队可删
+      const byTeam = {}
+      ;(detail.signups || []).filter((row) => row.status === 'signed').forEach((row) => {
+        if (!byTeam[row.teamId]) byTeam[row.teamId] = []
+        byTeam[row.teamId].push(row)
+      })
+      const occupiedId = (divided.teams || []).map((team) => team.id).find((id) => (byTeam[id] || []).length > 0)
+      const emptyId = (divided.teams || []).map((team) => team.id).find((id) => !(byTeam[id] || []).length)
+      if (!occupiedId || !emptyId) throw new Error('roster split: need both occupied and empty team')
+      const occupiedPlayer = (byTeam[occupiedId] || [])[0]
+      assertOk('saveTacticsBoard jielong', await callApi(miniProgram, 'saveTacticsBoard', {
+        scope: 'activity',
+        activityId: created.activityId,
+        teamId: occupiedId,
+        slots: [{ userId: occupiedPlayer.userId || occupiedPlayer._openid, x: 0.5, y: 0.87, role: 'gk' }]
+      }))
+      assertOk('setSessionColor rename keep tactics', await callApi(miniProgram, 'setSessionColor', {
+        activityId: created.activityId,
+        teamId: occupiedId,
+        name: '改名后分组'
+      }))
+      const detailAfterRename = assertOk('activityDetail jielong after rename', await callApi(miniProgram, 'activityDetail', {
+        activityId: created.activityId
+      }))
+      if (!detailAfterRename.activityBoards || !detailAfterRename.activityBoards[occupiedId]) {
+        throw new Error('setSessionColor: tactics board lost after team rename')
+      }
+      pass('jielong tactics board kept after rename')
+      assertFail('removeSessionTeam occupied', await callApi(miniProgram, 'removeSessionTeam', {
+        activityId: created.activityId,
+        teamId: occupiedId
+      }))
+      const removed = assertOk('removeSessionTeam empty', await callApi(miniProgram, 'removeSessionTeam', {
+        activityId: created.activityId,
+        teamId: emptyId
+      }))
+      if ((removed.teams || []).length !== 5) throw new Error('removeSessionTeam: expected 5 teams')
+      if (removed.fixtureCount !== 0) throw new Error('removeSessionTeam: expected 0 auto fixtures, got ' + removed.fixtureCount)
+      assertFail('startJielongCup too few active teams', await callApi(miniProgram, 'startJielongCup', {
+        activityId: created.activityId
+      }))
+      const remainingTeams = (removed.teams || []).map((t) => t.id)
+      const fullTeamId = remainingTeams.find((id) => (byTeam[id] || []).length >= 10)
+      const alreadyOccupiedCount = remainingTeams.filter((id) => (byTeam[id] || []).length > 0).length
+      const neededEmptyCount = Math.max(0, 4 - alreadyOccupiedCount)
+      const otherEmptyIds = remainingTeams.filter((id) => !(byTeam[id] || []).length).slice(0, neededEmptyCount)
+      for (let idx = 0; idx < otherEmptyIds.length; idx += 1) {
+        const p = byTeam[fullTeamId][idx]
+        assertOk('adminMoveSignup for cup', await callApi(miniProgram, 'adminMoveSignup', {
+          activityId: created.activityId,
+          targetOpenid: p._openid,
+          teamId: otherEmptyIds[idx]
+        }))
+      }
+      const cupRes = assertOk('startJielongCup four active teams', await callApi(miniProgram, 'startJielongCup', {
+        activityId: created.activityId
+      }))
+      if (!cupRes.cupStarted || cupRes.fixtureCount !== 6) {
+        throw new Error('startJielongCup: expected cupStarted=true & 6 fixtures, got ' + JSON.stringify(cupRes))
+      }
+      const detailCup = assertOk('activityDetail after startJielongCup', await callApi(miniProgram, 'activityDetail', {
+        activityId: created.activityId
+      }))
+      const firstRound = (detailCup.rounds || [])[0]
+      assertOk('saveFixtureScore cup round1', await callApi(miniProgram, 'saveFixtureScore', {
+        roundId: firstRound._id,
+        scoreA: 2,
+        scoreB: 1
+      }))
+      assertFail('startJielongCup locked by score', await callApi(miniProgram, 'startJielongCup', {
+        activityId: created.activityId
+      }))
+      const cleared = assertOk('clearFixtureScores', await callApi(miniProgram, 'clearFixtureScores', {
+        activityId: created.activityId
+      }))
+      if (cleared.cleared !== 1) throw new Error('clearFixtureScores: expected 1 cleared, got ' + cleared.cleared)
+      const resetRes = assertOk('resetFixtures four teams', await callApi(miniProgram, 'resetFixtures', {
+        activityId: created.activityId
+      }))
+      if (resetRes.fixtureCount !== 6) throw new Error('resetFixtures: expected 6 fixtures')
+      pass('startJielongCup and clearFixtureScores')
       assertDelete('deleteActivity jielong', await callApi(miniProgram, 'deleteActivity', {
         activityId: created.activityId
       }))

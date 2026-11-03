@@ -1,4 +1,4 @@
-const { call, callQuiet, uploadAvatar, avatarChar, avatarColor } = require('../../utils/api')
+const { call, callQuiet, uploadAvatar, avatarChar, avatarColor, assertPlayerName } = require('../../utils/api')
 const { PREFERRED_POSITIONS, positionLabel } = require('../../utils/tactics')
 const { resolveFilter, clubLabel, setMultiClubReady, joinedClubs, normalizeClubs } = require('../../utils/club-context')
 
@@ -46,6 +46,13 @@ Page({
     editAvatarBg: '#0f3d2e',
     editIsClubAdmin: false,
     editCanToggleAdmin: false,
+    editPlayerStats: {
+      activities: 0,
+      goals: 0,
+      assists: 0,
+      ownGoals: 0,
+      absences: 0
+    },
     savingPlayer: false
   },
   onShow() {
@@ -126,6 +133,16 @@ Page({
         const effectiveRole = role
           || (isClubAdmin && user && item._id === user._id && user.canGrantAdmin ? 'owner' : '')
           || (isClubAdmin ? 'admin' : '')
+        const rawClubStats = (item.clubStats && item.clubStats[activeClubId]) || null
+        const currentClubStats = canEditPlayers && rawClubStats
+          ? {
+            activities: Number(rawClubStats.activities) || 0,
+            goals: Number(rawClubStats.goals) || 0,
+            assists: Number(rawClubStats.assists) || 0,
+            ownGoals: Number(rawClubStats.ownGoals) || 0,
+            absences: Number(rawClubStats.absences) || 0
+          }
+          : null
         return {
           ...item,
           preferredPosition: item.preferredPosition || 'mf',
@@ -143,7 +160,8 @@ Page({
             : (isClubAdmin ? '管理员' : ''),
           metaText: activeClubId === 'club_wednesday'
             ? ''
-            : (joined ? '界龙散客' : ''),
+            : (joined ? '界龙散客队' : ''),
+          currentClubStats,
           groupId: (item.clubGroupIds && item.clubGroupIds[activeClubId])
             || item.groupId
             || (user && item._id === user._id
@@ -261,7 +279,14 @@ Page({
       editAvatarChar: avatarChar(target.name),
       editAvatarBg: avatarColor(target.name),
       editIsClubAdmin: !!target.isClubAdmin,
-      editCanToggleAdmin: !!target.canToggleAdmin
+      editCanToggleAdmin: !!target.canToggleAdmin,
+      editPlayerStats: target.currentClubStats || {
+        activities: 0,
+        goals: 0,
+        assists: 0,
+        ownGoals: 0,
+        absences: 0
+      }
     })
   },
   closeEditModal() {
@@ -296,11 +321,12 @@ Page({
   },
   saveEditPlayer() {
     if (this.data.savingPlayer) return
-    const name = String(this.data.editName || '').trim()
-    if (!name) {
-      wx.showToast({ title: '请填写姓名', icon: 'none' })
+    const checked = assertPlayerName(this.data.editName, '请填写姓名')
+    if (!checked.ok) {
+      wx.showToast({ title: checked.message, icon: 'none' })
       return
     }
+    const name = checked.name
     this.setData({ savingPlayer: true })
     const submit = (avatarUrl) => {
       const payload = {

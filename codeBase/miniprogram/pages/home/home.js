@@ -5,11 +5,9 @@ const {
   setMultiClubReady,
   clubLabel,
   summaryPayload,
-  pickPreferredCreateClub,
   resolveFilter,
   joinedClubs,
   normalizeClubs,
-  otherJoinedClub,
   writeFilter,
   activityPageForClub
 } = require('../../utils/club-context')
@@ -26,6 +24,13 @@ function countdownText(startTime) {
   const hours = diff / 3600000
   if (hours < 24) return `还有 ${Math.max(1, Math.round(hours))} 小时`
   return `还有 ${Math.ceil(hours / 24)} 天`
+}
+
+function sessionTeamLabel(activity, teamId) {
+  const id = String(teamId || '').trim()
+  if (!id || id === 'team_pending') return id === 'team_pending' ? '待分队' : ''
+  const hit = ((activity && activity.teams) || []).find((team) => team && (team.id === id || team._id === id))
+  return (hit && hit.name) || ''
 }
 
 function decorateNext(activity, teams, myTeamId) {
@@ -60,12 +65,10 @@ Page({
     next: null,
     weather: null,
     loading: true,
-    isAdmin: false,
     signedTeamName: '',
     clubs: [],
     noClub: false,
-    viewClubFilter: '',
-    otherHint: ''
+    viewClubFilter: ''
   },
   onShow() {
     this.load()
@@ -75,11 +78,19 @@ Page({
     if (!next) {
       return { title: '快乐足球', path: '/pages/home/home' }
     }
+    const page = activityPageForClub(next.clubId)
+    if (next.isPool) {
+      const signed = next.poolSigned || 0
+      const gap = signed > 0 ? `已报名 ${signed} 人，速来！` : '报名开启，速来！'
+      return {
+        title: `${next.title} ${gap}`,
+        path: `/pages/${page}/${page}?id=${next._id}`
+      }
+    }
     const quotas = next.quotas || []
     const left = quotas.reduce((sum, quota) => sum + Math.max(0, (quota.maxSignups || 0) - (quota.signed || 0)), 0)
     const waiting = next.waitlistCount || 0
     const gap = left > 0 ? '还差 ' + left + ' 人，速来！' : (waiting < 6 ? '正选已满，可排后补' : '已满员，可先围观')
-    const page = activityPageForClub(next.clubId)
     return {
       title: `${next.title} ${gap}`,
       path: `/pages/${page}/${page}?id=${next._id}`
@@ -103,54 +114,38 @@ Page({
   },
   afterClubs(clubs, profile) {
     const joined = joinedClubs(clubs)
-    const anyAdmin = joined.some((club) => club.role === 'admin' || club.role === 'owner')
-      || !!(profile.user && profile.user.isAdmin)
     if (!joined.length) {
       this.setData({
         clubs,
         noClub: true,
         next: null,
         weather: null,
-        otherHint: '',
         viewClubFilter: '',
-        isAdmin: false,
         loading: false
       })
       return
     }
     const viewClubFilter = resolveFilter(clubs)
-    this.setData({ clubs, noClub: false, viewClubFilter, isAdmin: anyAdmin })
-    return this.loadSummary(clubs, profile, viewClubFilter)
+    this.setData({ clubs, noClub: false, viewClubFilter })
+    return this.loadSummary(profile)
   },
-  loadSummary(clubs, profile, viewClubFilter) {
-    const filter = viewClubFilter || FILTER_ALL
+  loadSummary(profile) {
     const myTeamId = (profile.user && profile.user.teamId) || 'team_jiong'
-    const other = otherJoinedClub(clubs, filter)
-    const jobs = [call('homeSummary', summaryPayload('3m', filter))]
-    if (other) jobs.push(callQuiet('homeSummary', summaryPayload('3m', other._id)).catch(() => null))
-
-    Promise.all(jobs).then(([summary, otherSummary]) => {
+    // 下一场：仅已报名的最近一场（跨已加入球队），不跟球队筛选
+    call('homeSummary', summaryPayload('3m', FILTER_ALL)).then((summary) => {
       const teams = summary.teams || []
       const next = decorateNext(summary.nextActivity, teams, myTeamId)
       let signedTeamName = ''
-      if (next && next.signedUp) {
+      if (next) {
+        // 界龙场次队在 activity.teams（sess_*），不能用周三联 TEAMS 去查
         signedTeamName = next.isPool
-          ? (next.divided ? (teamName(teams, next.signedTeamId) || '已报名') : '已报名')
+          ? (next.divided ? sessionTeamLabel(next, next.signedTeamId) : '')
           : teamName(teams, next.signedTeamId || myTeamId)
-      }
-      let otherHint = ''
-      const otherNext = otherSummary && otherSummary.nextActivity
-      if (other && otherNext && otherNext._id && (!next || otherNext._id !== next._id)) {
-        const when = new Date(otherNext.startTime)
-        otherHint = `${other.name}还有一场 · ${when.getMonth() + 1}月${when.getDate()}日`
       }
       this.setData({
         next,
         weather: null,
         signedTeamName,
-        otherHint,
-        otherClubId: other ? other._id : '',
-        otherActivityId: otherNext ? otherNext._id : '',
         loading: false
       })
       if (next && next.startTime) this.loadWeather(next.startTime)
@@ -173,14 +168,6 @@ Page({
       })
     }).catch(() => this.setData({ weather: null }))
   },
-  openOther() {
-    const clubId = this.data.otherClubId
-    const id = this.data.otherActivityId
-    if (!clubId || !id) return
-    writeFilter(clubId)
-    const page = activityPageForClub(clubId)
-    wx.navigateTo({ url: `/pages/${page}/${page}?id=${id}` })
-  },
   open(event) {
     const id = event.currentTarget.dataset.id
     const clubId = event.currentTarget.dataset.club || (this.data.next && this.data.next.clubId) || ''
@@ -188,19 +175,5 @@ Page({
     const page = activityPageForClub(clubId)
     wx.navigateTo({ url: `/pages/${page}/${page}?id=${id}` })
   },
-  noop() {},
-  create() {
-    const preferred = pickPreferredCreateClub(this.data.viewClubFilter, this.data.clubs)
-    if (preferred) {
-      wx.navigateTo({ url: `/pages/activity-edit/activity-edit?clubId=${preferred}` })
-      return
-    }
-    wx.showActionSheet({
-      itemList: ['周三联', '界龙散客'],
-      success: (res) => {
-        const clubId = res.tapIndex === 1 ? 'club_jielong' : 'club_wednesday'
-        wx.navigateTo({ url: `/pages/activity-edit/activity-edit?clubId=${clubId}` })
-      }
-    })
-  }
+  noop() {}
 })

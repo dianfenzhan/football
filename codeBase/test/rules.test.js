@@ -13,6 +13,8 @@ const {
   topBy,
   totalsByPlayer,
   attendancesByPlayer,
+  summarizePlayerStats,
+  summarizeAllPlayerStats,
   defaultWaitHours,
   jointPlacement,
   signupModeOf,
@@ -20,6 +22,9 @@ const {
   waitUntilAt,
   withHomeTeam,
   normalizePreferredPosition,
+  normalizePlayerName,
+  MAX_PLAYER_NAME_LENGTH,
+  resolveActivityTacticsGroups,
   validateTacticsBoardSave
 } = require('../cloudfunctions/api/rules')
 const {
@@ -42,6 +47,14 @@ test('不足 4 小时取消正选才记鸽子，正好 4 小时或后补不记',
   assert.equal(willRecordPigeon(start, start - 5 * 60 * 60 * 1000, 'signed'), false)
   assert.equal(willRecordPigeon(start, inside, 'waitlist'), false)
   assert.equal(willRecordPigeon(start, start, 'signed'), false)
+})
+
+test('界龙鸽子窗口为 1.5 小时', () => {
+  const start = at('2026-10-30T20:00:00+08:00')
+  const inside = start - (1.5 * 60 * 60 * 1000) + 1
+  assert.equal(willRecordPigeon(start, inside, 'signed', 1.5), true)
+  assert.equal(willRecordPigeon(start, start - 1.5 * 60 * 60 * 1000, 'signed', 1.5), false)
+  assert.equal(willRecordPigeon(start, start - 2 * 60 * 60 * 1000, 'signed', 1.5), false)
 })
 
 test('系统鸽子不能改，管理员标记可以改', () => {
@@ -133,11 +146,12 @@ test('normalizeQuotas 越界时带队名失败', () => {
   assert.throws(() => normalizeQuotas({ team_jiong: 1.5 }), /jiong 路青少年/)
 })
 
-test('鸽子不能同时有进球或助攻', () => {
-  assert.doesNotThrow(() => assertNotAbsentWithStats(false, 2, 1))
-  assert.doesNotThrow(() => assertNotAbsentWithStats(true, 0, 0))
-  assert.throws(() => assertNotAbsentWithStats(true, 1, 0), /进球和助攻得是 0/)
-  assert.throws(() => assertNotAbsentWithStats(true, 0, 1), /进球和助攻得是 0/)
+test('鸽子不能同时有进球、助攻或乌龙球', () => {
+  assert.doesNotThrow(() => assertNotAbsentWithStats(false, 2, 1, 1))
+  assert.doesNotThrow(() => assertNotAbsentWithStats(true, 0, 0, 0))
+  assert.throws(() => assertNotAbsentWithStats(true, 1, 0, 0), /进球、助攻和乌龙球得是 0/)
+  assert.throws(() => assertNotAbsentWithStats(true, 0, 1, 0), /进球、助攻和乌龙球得是 0/)
+  assert.throws(() => assertNotAbsentWithStats(true, 0, 0, 1), /进球、助攻和乌龙球得是 0/)
 })
 
 test('periodRange 的起止是东八区零点', () => {
@@ -188,8 +202,8 @@ test('recentStart 在目标月没有这一天时会溢到下个月', () => {
 
 test('totalsByPlayer 按人累加，姓名取最后一行，空头像不覆盖', () => {
   const totals = totalsByPlayer([
-    { playerOpenid: 'a', userName: '甲', teamId: 'team_jiong', goals: 1, assists: 0, absent: false },
-    { playerOpenid: 'a', userName: '甲二', teamId: 'team_jiong', avatarUrl: 'cloud://a', goals: 2, assists: 1, absent: true },
+    { playerOpenid: 'a', userName: '甲', teamId: 'team_jiong', goals: 1, assists: 0, ownGoals: 1, absent: false },
+    { playerOpenid: 'a', userName: '甲二', teamId: 'team_jiong', avatarUrl: 'cloud://a', goals: 2, assists: 1, ownGoals: 0, absent: true },
     { playerOpenid: 'a', userName: '甲三', teamId: 'team_pudong', avatarUrl: '', goals: 0, assists: 0, absent: true },
     { playerOpenid: 'b', userName: '乙', teamId: 'team_pudong', goals: 0, assists: 3, absent: false }
   ])
@@ -202,6 +216,7 @@ test('totalsByPlayer 按人累加，姓名取最后一行，空头像不覆盖',
     avatarUrl: 'cloud://a',
     goals: 3,
     assists: 1,
+    ownGoals: 1,
     absences: 2,
     attendances: 0
   })
@@ -261,25 +276,66 @@ test('topBy 只留大于 0 的前 10，同分再比进球', () => {
   assert.deepEqual(topBy(byAssists, 'assists').map((row) => row.playerOpenid), ['high', 'low'])
 })
 
-test('擅长位置校验与活动战术板 slots 上限', () => {
+test('擅长位置校验、分组战术板校验与本组人员过滤', () => {
   assert.equal(normalizePreferredPosition('fw'), 'fw')
   assert.equal(normalizePreferredPosition('gk'), 'gk')
   assert.equal(normalizePreferredPosition('', () => 0), 'fw')
   assert.equal(normalizePreferredPosition(undefined, () => 0.99), 'gk')
   assert.throws(() => normalizePreferredPosition('st'), /请选择擅长位置/)
 
-  const ok = validateTacticsBoardSave({
-    title: '炯队',
-    slots: [{ userId: 'u1', x: 0.5, y: 0.5, role: 'fw' }]
-  })
+  const ok = validateTacticsBoardSave(
+    {
+      title: '炯队',
+      slots: [
+        { userId: 'u1', x: 0.5, y: 0.5, role: 'fw' },
+        { userId: 'other_team_user', x: 0.3, y: 0.3, role: 'mf' }
+      ]
+    },
+    { allowedUserIds: ['u1', 'u2'] }
+  )
   assert.equal(ok.scope, 'activity')
   assert.equal(ok.title, '炯队')
   assert.equal(ok.slots.length, 1)
+  assert.equal(ok.slots[0].userId, 'u1')
+
+  const nineOk = validateTacticsBoardSave({
+    title: '界龙一队',
+    slots: Array.from({ length: 9 }, (_, i) => ({ userId: `u${i}`, x: 0.5, y: 0.5, role: 'mf' }))
+  })
+  assert.equal(nineOk.slots.length, 9)
 
   assert.throws(() => validateTacticsBoardSave({
-    title: '炯队',
-    slots: Array.from({ length: 9 }, (_, i) => ({ userId: `u${i}`, x: 0.5, y: 0.5, role: 'mf' }))
-  }), /场上最多 8 名球员/)
+    title: '界龙一队',
+    slots: Array.from({ length: 10 }, (_, i) => ({ userId: `u${i}`, x: 0.5, y: 0.5, role: 'mf' }))
+  }), /场上最多 9 名球员/)
+
+  // 界龙分组改名后 team.id 不变，已保存的 tactics_boards 按 teamId 索引不受影响
+  const beforeRename = resolveActivityTacticsGroups({
+    clubId: 'club_jielong',
+    divided: true,
+    teams: [{ id: 'sess_a', name: '红队', color: '#c44536' }, { id: 'sess_b', name: '蓝队', color: '#3d5a80' }]
+  })
+  const afterRename = resolveActivityTacticsGroups({
+    clubId: 'club_jielong',
+    divided: true,
+    teams: [{ id: 'sess_a', name: '塔子🕊', color: '#1d6b50' }, { id: 'sess_b', name: '蓝队', color: '#3d5a80' }]
+  })
+  assert.equal(beforeRename[0]._id, 'sess_a')
+  assert.equal(afterRename[0]._id, 'sess_a')
+  assert.equal(afterRename[0].name, '塔子🕊')
+})
+
+test('昵称 trim 后最多 16 个码点', () => {
+  assert.equal(MAX_PLAYER_NAME_LENGTH, 16)
+  assert.equal(normalizePlayerName('  Damon  '), 'Damon')
+  assert.equal(normalizePlayerName('塔子🕊'), '塔子🕊')
+  assert.equal(normalizePlayerName('一二三四五六七八九十一二三四五六'), '一二三四五六七八九十一二三四五六')
+  assert.throws(() => normalizePlayerName(''), /请填写姓名/)
+  assert.throws(() => normalizePlayerName('   '), /请填写姓名/)
+  assert.throws(
+    () => normalizePlayerName('一二三四五六七八九十一二三四五六七'),
+    /昵称最多 16 个字/
+  )
 })
 
 test('buildDefaultTacticsState 按近 3 月出勤前 8 与擅长位置排 3-2-2，冲突补空位，超出进轮换', () => {
@@ -303,16 +359,16 @@ test('buildDefaultTacticsState 按近 3 月出勤前 8 与擅长位置排 3-2-2�
   assert.equal(gkPlayer.userId, 'p8')
 })
 
-test('不足 8 人时附近无人的 3-2-2 默认坑位显示待报名，自由拖动与满员拖空地拦截，以及活动板正选校准', () => {
+test('不足 8 人时不显示待报名空坑，支持从候选池拖入第 9 人，满 9 人拖空地拦截、拖人身上互换，以及活动板正选校准', () => {
   const pool = [
     { userId: 'p1', userName: '张三', preferredPosition: 'fw', attendances: 5, createdAt: 100 },
     { userId: 'p2', userName: '李四', preferredPosition: 'gk', attendances: 4, createdAt: 200 },
     { userId: 'p3', userName: '王五', preferredPosition: 'mf', attendances: 3, createdAt: 300 }
   ]
-  const state3 = buildDefaultTacticsState(pool, { randomFn: () => 0, emptyText: '待报名' })
+  const state3 = buildDefaultTacticsState(pool, { randomFn: () => 0 })
   assert.equal(state3.onPitch.length, 3)
-  assert.equal(state3.emptySlots.length, 5)
-  assert.equal(state3.emptySlots[0].emptyText, '待报名')
+  assert.equal(state3.emptySlots.length, 0)
+  assert.equal(state3.pitchBadgeText, '上场 3/9')
 
   // 场上拖到空地改变坐标
   const moved = applyPitchDrag(state3, pool, {
@@ -326,7 +382,7 @@ test('不足 8 人时附近无人的 3-2-2 默认坑位显示待报名，自由�
   assert.equal(p1After.x, 0.5)
   assert.equal(p1After.y, 0.25)
 
-  // 拖进轮换栏即下场
+  // 拖进候选池即下场
   const toBench = applyPitchDrag(moved.state, pool, {
     source: 'pitch',
     userId: 'p1',
@@ -337,8 +393,8 @@ test('不足 8 人时附近无人的 3-2-2 默认坑位显示待报名，自由�
   assert.equal(filterBenchPlayers(toBench.state.bench, '张').length, 1)
   assert.equal(filterBenchPlayers(toBench.state.bench, '不存在').length, 0)
 
-  // 满 8 人时从轮换拖到空地提示并不换人，拖到某人身上才互换
-  const fullPool = Array.from({ length: 9 }, (_, i) => ({
+  // 10 人池：默认 8 人上场、2 人在候选池；从候选池拖第 9 人到空地可扩编至 9 人，第 10 人拖空地拦截、拖人身上互换
+  const fullPool = Array.from({ length: 10 }, (_, i) => ({
     userId: `u${i + 1}`,
     userName: `队员${i + 1}`,
     preferredPosition: 'mf',
@@ -346,30 +402,48 @@ test('不足 8 人时附近无人的 3-2-2 默认坑位显示待报名，自由�
   }))
   const fullState = buildDefaultTacticsState(fullPool, { randomFn: () => 0 })
   assert.equal(fullState.onPitch.length, 8)
-  assert.equal(fullState.bench.length, 1)
-  const blocked = applyPitchDrag(fullState, fullPool, {
+  assert.equal(fullState.bench.length, 2)
+  assert.equal(fullState.pitchBadgeText, '上场 8/9')
+
+  // 第 9 人拖到球场空地 -> 直接上场变成 9 人
+  const ninthAdded = applyPitchDrag(fullState, fullPool, {
     source: 'bench',
     userId: 'u9',
+    dropZone: 'pitch',
+    x: 0.5,
+    y: 0.41
+  })
+  assert.equal(ninthAdded.toast, '')
+  assert.equal(ninthAdded.state.onPitch.length, 9)
+  assert.equal(ninthAdded.state.bench.length, 1)
+  assert.equal(ninthAdded.state.pitchBadgeText, '上场 9/9')
+
+  // 已满 9 人时第 10 人拖到空地拦截
+  const blocked = applyPitchDrag(ninthAdded.state, fullPool, {
+    source: 'bench',
+    userId: 'u10',
     dropZone: 'pitch',
     x: 0.1,
     y: 0.1
   })
-  assert.equal(blocked.toast, '场上已满，先把一个人拖到轮换')
-  assert.equal(blocked.state.onPitch.some((p) => p.userId === 'u9'), false)
+  assert.equal(blocked.toast, '场上最多 9 人，先把一个人拖到候选池')
+  assert.equal(blocked.state.onPitch.some((p) => p.userId === 'u10'), false)
 
-  const targetOnPitch = fullState.onPitch[0]
-  const swapped = applyPitchDrag(fullState, fullPool, {
+  // 已满 9 人时拖到场上某人身上可互换
+  const targetOnPitch = ninthAdded.state.onPitch[0]
+  const swapped = applyPitchDrag(ninthAdded.state, fullPool, {
     source: 'bench',
-    userId: 'u9',
+    userId: 'u10',
     dropZone: 'pitch',
     x: targetOnPitch.x,
     y: targetOnPitch.y
   })
   assert.equal(swapped.toast, '')
-  assert.equal(swapped.state.onPitch.some((p) => p.userId === 'u9'), true)
+  assert.equal(swapped.state.onPitch.length, 9)
+  assert.equal(swapped.state.onPitch.some((p) => p.userId === 'u10'), true)
   assert.equal(swapped.state.bench.some((p) => p.userId === targetOnPitch.userId), true)
 
-  // 已保存活动板再次打开时，离队撤下并提示、新人进轮换池
+  // 已保存活动板再次打开时，离队撤下并提示、新人进候选池
   const reconciled = reconcileSavedBoard(
     [
       { userId: 'p1', x: 0.35, y: 0.22, role: 'fw' },
@@ -382,4 +456,70 @@ test('不足 8 人时附近无人的 3-2-2 默认坑位显示待报名，自由�
   assert.equal(reconciled.bench.length, 2)
   assert.equal(reconciled.removedNotice, '已不在本场正选的人已从板上拿下')
 })
+
+test('个人运动数据汇总：总活动数、进球、助攻、乌龙球与鸽子数', () => {
+  const now = 1000
+  const stats = summarizePlayerStats('u1', {
+    now,
+    startedIds: ['act1', 'act2', 'act3'],
+    validActivityIds: ['act1', 'act2', 'act3', 'act_future'],
+    signups: [
+      { _openid: 'u1', activityId: 'act1', status: 'signed' },
+      { _openid: 'u1', activityId: 'act2', status: 'signed' },
+      { _openid: 'u1', activityId: 'act3', status: 'waitlist' },
+      { _openid: 'u1', activityId: 'act_future', status: 'signed' },
+      { _openid: 'u2', activityId: 'act1', status: 'signed' }
+    ],
+    contributions: [
+      { playerOpenid: 'u1', activityId: 'act1', activityStartTime: 500, goals: 2, assists: 1, ownGoals: 1, absent: false },
+      { playerOpenid: 'u1', activityId: 'act2', activityStartTime: 600, goals: 0, assists: 0, ownGoals: 0, absent: true },
+      { playerOpenid: 'u1', activityId: 'act_future', activityStartTime: 2000, goals: 0, assists: 0, ownGoals: 0, absent: true },
+      { playerOpenid: 'u1', activityId: 'act_deleted', activityStartTime: 400, goals: 9, assists: 9, ownGoals: 9, absent: true }
+    ],
+    goalEvents: [
+      { activityId: 'act1', scorerOpenid: 'u1', assisterOpenid: 'u2', isOwnGoal: false },
+      { activityId: 'act1', scorerOpenid: 'u2', assisterOpenid: 'u1', isOwnGoal: false },
+      { activityId: 'act1', scorerOpenid: 'u1', assisterOpenid: '', isOwnGoal: true }
+    ]
+  })
+  assert.deepEqual(stats, {
+    activities: 1,
+    goals: 3,
+    assists: 2,
+    ownGoals: 2,
+    absences: 1
+  })
+  const byPlayer = summarizeAllPlayerStats({
+    now,
+    startedIds: ['act1', 'act2', 'act3'],
+    validActivityIds: ['act1', 'act2', 'act3', 'act_future'],
+    signups: [
+      { _openid: 'u1', activityId: 'act1', status: 'signed' },
+      { _openid: 'u1', activityId: 'act2', status: 'signed' },
+      { _openid: 'u2', activityId: 'act1', status: 'signed' }
+    ],
+    contributions: [
+      { playerOpenid: 'u1', activityId: 'act1', activityStartTime: 500, goals: 2, assists: 1, ownGoals: 1, absent: false },
+      { playerOpenid: 'u1', activityId: 'act2', activityStartTime: 600, goals: 0, assists: 0, ownGoals: 0, absent: true }
+    ],
+    goalEvents: [
+      { activityId: 'act1', scorerOpenid: 'u2', assisterOpenid: 'u1', isOwnGoal: false }
+    ]
+  })
+  assert.deepEqual(byPlayer.u1, {
+    activities: 1,
+    goals: 2,
+    assists: 2,
+    ownGoals: 1,
+    absences: 1
+  })
+  assert.deepEqual(byPlayer.u2, {
+    activities: 1,
+    goals: 1,
+    assists: 0,
+    ownGoals: 0,
+    absences: 0
+  })
+})
+
 

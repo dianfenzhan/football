@@ -1,29 +1,47 @@
 ---
-description: two 分支禁止部署云函数
+description: two 分支禁止部署到正式云环境；测试环境可部署
 alwaysApply: true
 ---
 
-# two 分支：禁止部署云函数
+# two 分支：禁止部署到正式环境
 
-## 开关（仅用户可改）
+`two` 上可以往**测试小程序 / 测试云环境**部署；禁止往**正式**部署。
+
+## 正式环境识别
+
+以下任一命中即视为正式（勿改这些 ID 来绕过）：
+
+- AppID：`wxb8021a7ae0c71bd0`
+- 云环境：`cloudbase-d5g20kltv44b494f6`
+- profile：`prod`（`npm run use:prod` / `active-profile.local.json`）
+
+测试（可部署）：
+
+- AppID：`wxde2b012e6a42481c`
+- 云环境：`dev-d7g1iusl7549930ee`
+- profile：`test`
+
+## 开关（仅用户可改；只控制「two 上部署正式」）
 
 ```
-allowDeployOnTwo: false
+allowDeployProdOnTwo: false
 ```
 
-- Agent MUST NOT 自行把该值改成 `true`，也 MUST NOT 建议/代改此参数
-- 只有用户**亲手**把上面改成 `allowDeployOnTwo: true`，**并且**当面说「可以部署」后，才允许在 `two` 上部署
-- 仅口头说「部署一下 / 可以部署」而参数仍为 `false` → MUST 拒绝
-- 参数已是 `true` 但用户未说「可以部署」→ MUST 拒绝
-- 部署完成后，提醒用户把参数改回 `false`；Agent 仍不得代改
+- Agent MUST NOT 自行改成 `true`，也 MUST NOT 建议/代改
+- 只有用户**亲手**改成 `true` **并且**当面说「可以部署正式」后，才允许在 `two` 上部署到正式
+- 口头只说「可以部署」且当前是 test profile → 视为允许部署测试，不涉及本开关
+- 参数已是 `true` 但未说「可以部署正式」→ MUST 拒绝正式部署
+- 正式部署完成后，提醒用户把参数改回 `false`；Agent 仍不得代改
 
 ## 禁令
 
-当前 git 分支为 `two`（`git branch --show-current` 为 `two`，或用户明确说在 `two` 上），且未满足上方双条件时：
+当前分支为 `two`，且目标是正式环境，且未满足上方双条件时：
 
-- MUST NOT 部署 / 上传云函数到云端
-- 包括：`npm run deploy:cloud`、`node scripts/deploy-cloud.js`（含 `--function-only`）、微信开发者工具 CLI `cloud functions deploy`、开发者工具「上传并部署」、冒烟流程里的部署步骤
-- 拒绝时说明：`two` 需你手动把 `allowDeployOnTwo` 改为 `true` 并明确说可以部署
-- `/smoke-test` 在 `two` 上若需要部署才能跑：跳过部署并说明原因，不要擅自上传
+- MUST NOT 部署 / 上传云函数或小程序代码到正式
+- 包括：`npm run deploy:cloud`、`node scripts/deploy-cloud.js`、开发者工具上传、冒烟里的部署
+- 拒绝时说明：`two` 上正式环境需你手动把 `allowDeployProdOnTwo` 改为 `true` 并明确说可以部署正式
 
-切到非 `two` 分支后，本禁令失效，按既有部署约定执行（与该开关无关）。
+## 允许
+
+- `two` + `npm run use:test`（或 secrets 指向测试 AppID/envId）→ 可以部署测试环境，**不需要**改上述开关
+- 切到非 `two` 分支后，本禁令失效（按既有约定；与本开关无关）

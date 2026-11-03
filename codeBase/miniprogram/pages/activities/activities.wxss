@@ -47,6 +47,15 @@
   transition: none;
 }
 
+.swipe-card.expired {
+  opacity: 0.55;
+}
+
+.swipe-card.expired .title,
+.swipe-card.expired .club-tag {
+  color: #66706c;
+}
+
 .club-tag {
   font-weight: 400;
   color: #66706c;

@@ -14,7 +14,7 @@ App({
     const init = { traceUser: true }
     if (cloudConfig.envId) init.env = cloudConfig.envId
     wx.cloud.init(init)
-    // 开发默认应打本地 api；未开启本地调试时弹窗提示（测线上时请 setForceRemoteCloud(true) 并取消勾选本地调试）
+    // 正式 profile 开发默认打本地 api；测试 profile（forceRemoteCloud）跳过探测，直接打测试云端
     setTimeout(() => { probeLocalApi() }, 800)
   },
   globalData: {

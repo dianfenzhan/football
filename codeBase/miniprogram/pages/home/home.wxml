@@ -17,7 +17,7 @@
       <view class="next-block">
         <view class="hero" data-id="{{next._id}}" data-club="{{next.clubId}}" bindtap="open">
           <view class="hero-top">
-            <view class="kicker">下一场{{next.clubLabel ? ' · ' + next.clubLabel : ''}}</view>
+            <view class="kicker">已报名{{next.clubLabel ? ' · ' + next.clubLabel : ''}}</view>
             <view class="countdown">{{next.countdown}}</view>
           </view>
           <view class="hero-title">{{next.title}}</view>
@@ -26,7 +26,7 @@
           <view wx:if="{{next.isPool}}" class="quota">
             <view class="quota-head">
               <text>已报名</text>
-              <text>{{next.poolSigned}} / {{next.poolCap}}</text>
+              <text>{{next.poolSigned}} / {{next.poolCap}} 人</text>
             </view>
             <view class="bar"><view class="bar-fill" style="width: {{next.poolPercent}}%;"></view></view>
           </view>
@@ -39,10 +39,8 @@
           </view>
         </view>
         <view class="next-mid">
-          <view wx:if="{{next.signedUp}}" class="signed-banner">✓ 已报名 · {{signedTeamName}}</view>
-          <button wx:else class="btn hero-cta" data-id="{{next._id}}" data-club="{{next.clubId}}" bindtap="open">⚽️ 去报名</button>
+          <view class="signed-banner">✓ 已报名<text wx:if="{{signedTeamName}}"> · {{signedTeamName}}</text></view>
         </view>
-        <view wx:if="{{otherHint}}" class="other-hint" bindtap="openOther">{{otherHint}} ›</view>
         <view wx:if="{{weather}}" class="next-weather" catchtap="noop">
           <weather-hour
             hours="{{weather.hours}}"
@@ -56,14 +54,11 @@
         </view>
       </view>
     </block>
-    <view wx:else class="hero hero-empty">
+    <view wx:elif="{{!noClub}}" class="hero hero-empty">
       <view class="empty-icon">🥅</view>
-      <view class="empty-title">最近没有球局</view>
-      <view class="empty-sub">等管理员安排一场，先看看别的</view>
+      <view class="empty-title">暂无报名的比赛</view>
+      <view class="empty-sub">去活动页看看有没有合适的场次</view>
     </view>
-    <view wx:if="{{otherHint && !next}}" class="other-hint lone" bindtap="openOther">{{otherHint}} ›</view>
-    <button wx:if="{{isAdmin && !next && !noClub}}" class="btn hero-cta" bindtap="create">＋ 新建活动</button>
   </block>
   <nav current="home" />
-  <mirror />
 </view>

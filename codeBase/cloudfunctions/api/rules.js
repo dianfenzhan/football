@@ -31,12 +31,14 @@ function totalsByPlayer(rows) {
         avatarUrl: row.avatarUrl || '',
         goals: 0,
         assists: 0,
+        ownGoals: 0,
         absences: 0,
         attendances: 0
       }
     }
     byPlayer[key].goals += row.goals || 0
     byPlayer[key].assists += row.assists || 0
+    byPlayer[key].ownGoals += row.ownGoals || 0
     if (row.absent) byPlayer[key].absences += 1
     byPlayer[key].userName = row.userName
     byPlayer[key].avatarUrl = row.avatarUrl || byPlayer[key].avatarUrl
@@ -79,6 +81,60 @@ function attendancesByPlayer(signups, options = {}) {
   return Object.values(byPlayer)
 }
 
+function summarizePlayerStats(openid, options = {}) {
+  const empty = { activities: 0, goals: 0, assists: 0, ownGoals: 0, absences: 0 }
+  if (!openid) return empty
+  const now = options.now === undefined ? Date.now() : options.now
+  const startedIds = new Set(options.startedIds || [])
+  const validSet = options.validActivityIds ? new Set(options.validActivityIds) : null
+  const playerContribs = (options.contributions || []).filter((row) => (
+    row
+    && row.playerOpenid === openid
+    && (!validSet || !row.activityId || validSet.has(row.activityId))
+  ))
+  const countedContribs = boardRows(playerContribs, now)
+  const absentKeys = new Set()
+  let goals = 0
+  let assists = 0
+  let ownGoals = 0
+  let absences = 0
+  for (const row of countedContribs) {
+    goals += row.goals || 0
+    assists += row.assists || 0
+    ownGoals += row.ownGoals || 0
+    if (row.absent) {
+      absences += 1
+      if (row.activityId) absentKeys.add(`${row.activityId}:${openid}`)
+    }
+  }
+  for (const ev of options.goalEvents || []) {
+    if (!ev || (validSet && ev.activityId && !validSet.has(ev.activityId))) continue
+    if (ev.isOwnGoal) {
+      if (ev.scorerOpenid === openid) ownGoals += 1
+      continue
+    }
+    if (ev.scorerOpenid === openid) goals += 1
+    if (ev.assisterOpenid === openid) assists += 1
+  }
+  const attendedActivityIds = new Set()
+  for (const signup of options.signups || []) {
+    if (!signup) continue
+    const playerOpenid = signup._openid || signup.playerOpenid
+    if (playerOpenid !== openid) continue
+    if (signup.status && signup.status !== 'signed') continue
+    if (!startedIds.has(signup.activityId)) continue
+    if (absentKeys.has(`${signup.activityId}:${openid}`)) continue
+    attendedActivityIds.add(signup.activityId)
+  }
+  return {
+    activities: attendedActivityIds.size,
+    goals,
+    assists,
+    ownGoals,
+    absences
+  }
+}
+
 function topBy(rows, field) {
   return rows
     .filter((row) => row[field] > 0)
@@ -114,9 +170,9 @@ function localDate(year, monthIndex, day) {
   return Date.UTC(year, monthIndex, day) - CST_OFFSET
 }
 
-function assertNotAbsentWithStats(absent, goals, assists) {
-  if (absent && ((goals || 0) !== 0 || (assists || 0) !== 0)) {
-    throw new Error('鸽子的情况下，进球和助攻得是 0')
+function assertNotAbsentWithStats(absent, goals, assists, ownGoals) {
+  if (absent && ((goals || 0) !== 0 || (assists || 0) !== 0 || (ownGoals || 0) !== 0)) {
+    throw new Error('鸽子的情况下，进球、助攻和乌龙球得是 0')
   }
 }
 
@@ -139,6 +195,7 @@ function pigeonRoster(contributions) {
     .slice()
     .sort((a, b) => (b.pigeonAt || 0) - (a.pigeonAt || 0))
     .map((row) => ({
+      _id: row._id || '',
       playerOpenid: row.playerOpenid,
       userName: row.userName,
       avatarUrl: row.avatarUrl || '',
@@ -234,7 +291,35 @@ const PREFERRED_POSITIONS = [
   { id: 'gk', label: '门将' }
 ]
 const POSITION_IDS = PREFERRED_POSITIONS.map((item) => item.id)
-const MAX_ON_PITCH = 8
+const DEFAULT_ON_PITCH = 8
+const MAX_ON_PITCH = 9
+const MAX_PLAYER_NAME_LENGTH = 16
+
+function resolveActivityTacticsGroups(activity) {
+  if (activity && activity.clubId === 'club_jielong') {
+    if (!activity.divided || !Array.isArray(activity.teams)) return []
+    return activity.teams
+      .filter((t) => t && t.id && t.id !== 'team_pending')
+      .map((t) => ({
+        _id: t.id,
+        id: t.id,
+        name: t.name || t.id,
+        color: t.color || ''
+      }))
+  }
+  return rosterTeams(signupModeOf(activity)).map((t) => ({
+    _id: t._id,
+    id: t._id,
+    name: t.name
+  }))
+}
+
+function normalizePlayerName(raw) {
+  const name = String(raw || '').trim()
+  if (!name) throw new Error('请填写姓名')
+  if ([...name].length > MAX_PLAYER_NAME_LENGTH) throw new Error('昵称最多 16 个字')
+  return name
+}
 
 function isValidPosition(pos) {
   return POSITION_IDS.indexOf(pos) !== -1
@@ -254,17 +339,22 @@ function normalizePreferredPosition(pos, randomFn = Math.random) {
   return value
 }
 
-function validateTacticsBoardSave(payload) {
+function validateTacticsBoardSave(payload, options = {}) {
   const title = String((payload && payload.title) || '').trim() || '本场战术板'
   const slots = Array.isArray(payload && payload.slots) ? payload.slots : []
   if (slots.length > MAX_ON_PITCH) {
-    throw new Error('场上最多 8 名球员')
+    throw new Error('场上最多 9 名球员')
   }
+  const allowedRaw = options && options.allowedUserIds
+  const allowedSet = allowedRaw
+    ? (allowedRaw instanceof Set ? allowedRaw : new Set(Array.from(allowedRaw).map(String)))
+    : null
   const seen = new Set()
   const normalizedSlots = []
   for (const item of slots) {
     const userId = String((item && (item.userId || item._id || item.openid || item._openid)) || '').trim()
     if (!userId || seen.has(userId)) continue
+    if (allowedSet && !allowedSet.has(userId)) continue
     seen.add(userId)
     const rawX = Number(item.x)
     const rawY = Number(item.y)
@@ -280,13 +370,77 @@ function validateTacticsBoardSave(payload) {
   }
 }
 
+function summarizeAllPlayerStats(options = {}) {
+  const now = options.now === undefined ? Date.now() : options.now
+  const startedIds = new Set(options.startedIds || [])
+  const validSet = options.validActivityIds ? new Set(options.validActivityIds) : null
+  const byPlayer = {}
+  const ensure = (openid) => {
+    if (!openid) return null
+    if (!byPlayer[openid]) {
+      byPlayer[openid] = { activities: 0, goals: 0, assists: 0, ownGoals: 0, absences: 0 }
+    }
+    return byPlayer[openid]
+  }
+  const filteredContribs = (options.contributions || []).filter((row) => (
+    row
+    && row.playerOpenid
+    && (!validSet || !row.activityId || validSet.has(row.activityId))
+  ))
+  const countedContribs = boardRows(filteredContribs, now)
+  const absentKeys = new Set()
+  for (const row of countedContribs) {
+    const entry = ensure(row.playerOpenid)
+    if (!entry) continue
+    entry.goals += row.goals || 0
+    entry.assists += row.assists || 0
+    entry.ownGoals += row.ownGoals || 0
+    if (row.absent) {
+      entry.absences += 1
+      if (row.activityId) absentKeys.add(`${row.activityId}:${row.playerOpenid}`)
+    }
+  }
+  for (const ev of options.goalEvents || []) {
+    if (!ev || (validSet && ev.activityId && !validSet.has(ev.activityId))) continue
+    if (ev.isOwnGoal) {
+      const entry = ensure(ev.scorerOpenid)
+      if (entry) entry.ownGoals += 1
+      continue
+    }
+    const scorer = ensure(ev.scorerOpenid)
+    if (scorer) scorer.goals += 1
+    const assister = ensure(ev.assisterOpenid)
+    if (assister) assister.assists += 1
+  }
+  const attendedByPlayer = {}
+  for (const signup of options.signups || []) {
+    if (!signup) continue
+    const openid = signup._openid || signup.playerOpenid
+    if (!openid) continue
+    if (signup.status && signup.status !== 'signed') continue
+    if (!startedIds.has(signup.activityId)) continue
+    if (absentKeys.has(`${signup.activityId}:${openid}`)) continue
+    if (!attendedByPlayer[openid]) attendedByPlayer[openid] = new Set()
+    attendedByPlayer[openid].add(signup.activityId)
+  }
+  for (const openid of Object.keys(attendedByPlayer)) {
+    const entry = ensure(openid)
+    if (entry) entry.activities = attendedByPlayer[openid].size
+  }
+  return byPlayer
+}
+
 module.exports = {
   TEAMS,
   UNITE_TEAM,
   WAIT_HOURS,
   PREFERRED_POSITIONS,
   POSITION_IDS,
+  DEFAULT_ON_PITCH,
   MAX_ON_PITCH,
+  MAX_PLAYER_NAME_LENGTH,
+  resolveActivityTacticsGroups,
+  normalizePlayerName,
   assertNotAbsentWithStats,
   assertPigeonEditable,
   boardRows,
@@ -304,6 +458,8 @@ module.exports = {
   topBy,
   totalsByPlayer,
   attendancesByPlayer,
+  summarizePlayerStats,
+  summarizeAllPlayerStats,
   waitChoices,
   waitUntilAt,
   withHomeTeam,

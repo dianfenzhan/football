@@ -1,0 +1,9 @@
+{
+  "name": "测试：杰克的周三足球二",
+  "appId": "wxde2b012e6a42481c",
+  "appSecret": "测试 AppSecret，不要提交",
+  "privateKeyPath": "private.wxde2b012e6a42481c.key",
+  "envId": "dev-d7g1iusl7549930ee",
+  "subscribeRemindTemplate": "",
+  "subscribePromoteTemplate": ""
+}

@@ -37,10 +37,10 @@ function fallbackClubsFromProfile(user, teams) {
       if (item.clubId === 'club_jielong') {
         clubs.push({
           _id: 'club_jielong',
-          name: '界龙散客',
+          name: '界龙散客队',
           joined: true,
           role: item.role || defaultRole,
-          groupId: '',
+          groupId: item.groupId || '',
           groups: []
         })
         return
@@ -58,8 +58,8 @@ function fallbackClubsFromProfile(user, teams) {
     })
     if (clubs.length) return clubs
   }
-  // 旧档：有姓名/球队/管理员身份，视为已加入周三联
-  if (!(user.teamId || user.name || user.isAdmin || user.canGrantAdmin)) return []
+  // 旧档：有周三联球队/管理员身份，视为已加入周三联
+  if (!(user.teamId || user.isAdmin || user.canGrantAdmin)) return []
   return [{
     _id: 'club_wednesday',
     name: '周三联',
@@ -133,7 +133,7 @@ function resolveFilter(clubs) {
 
 function clubLabel(clubId) {
   if (!clubId) return '未加入球队'
-  if (clubId === 'club_jielong') return '界龙散客'
+  if (clubId === 'club_jielong') return '界龙散客队'
   if (clubId === 'club_wednesday') return '周三联'
   return '全部'
 }

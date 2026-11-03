@@ -1,115 +1,264 @@
 <view class="page" wx:if="{{activity}}">
-  <view class="hero">
-    <view class="hero-title">{{activity.title}}</view>
-    <view class="hero-meta">{{timeText}}</view>
-    <view class="hero-meta">{{activity.location}}</view>
-    <view class="hero-count">已报名 {{signedCount}} / {{activity.maxSignedPlayers || 40}}</view>
-  </view>
-
-  <view class="card action" wx:if="{{!started}}">
-    <block wx:if="{{!mineStatus}}">
-      <view class="action-tip">本场不用选队，人齐了老板再分。请先确认你的名册分组（必选，默认散客⚽️）。</view>
-      <view class="roster-label">名册分组</view>
-      <view class="roster-chips">
-        <view
-          wx:for="{{rosterGroups}}"
-          wx:key="id"
-          class="roster-chip {{pickGroupId === item.id ? 'on' : ''}}"
-          data-id="{{item.id}}"
-          bindtap="onPickRoster"
-        >
-          <view class="dot" style="background: {{item.color}};"></view>
-          <text>{{item.name}}</text>
+  <view class="hero-block">
+    <view class="hero">
+      <view class="hero-top">
+        <view class="hero-title">{{activity.title}}</view>
+        <view class="hero-tools">
+          <view
+            wx:if="{{isAdmin && !started}}"
+            class="hero-pill"
+            bindtap="openBasics"
+          >改信息</view>
+          <button wx:if="{{!ended}}" class="hero-pill share-pill" open-type="share">📤 邀请</button>
         </view>
       </view>
-      <button class="btn" bindtap="signup">报名</button>
-    </block>
-    <block wx:else>
-      <view class="mine">{{mineStatus}}</view>
-      <view class="links">
-        <text class="link" bindtap="cancel">取消报名</text>
+      <view class="hero-meta">📅 {{timeText}}</view>
+      <view class="hero-meta">📍 {{activity.location}} · 已报名 {{signedCount}} 人</view>
+    </view>
+
+    <view wx:if="{{!ended}}" class="hero-bar">
+      <block wx:if="{{!signed}}">
+        <button class="btn hero-cta" bindtap="onSignupTap">⚽️ 立即报名{{started ? '（进行中）' : ''}}</button>
+      </block>
+      <view wx:else class="signed-banner">
+        <text class="signed-text">✓ {{mineStatus}}</text>
+        <view class="banner-btn danger" hover-class="banner-btn-hover" hover-stay-time="80" bindtap="cancel">取消报名</view>
       </view>
-    </block>
+    </view>
+    <view wx:else class="hero-ended">活动已结束</view>
   </view>
 
-  <view class="card" wx:if="{{isAdmin && !locked}}">
-    <button class="btn soft" bindtap="openDivide">{{divided ? '重新分队' : '分成若干队'}}</button>
-    <view class="muted" wx:if="{{!divided}}">建议人到齐再分。默认每队 8 人，可改成 7 或 9。</view>
+  <view class="card warn-banner" wx:if="{{cupStarted && cupTeamsChanged}}">
+    队伍已变化（当前 {{activeTeamCount}} 支非空队），界龙杯仍按开赛时的 {{cupTeamCount}} 队计分。{{isAdmin ? '请点「重开界龙杯」同步赛程。' : ''}}
   </view>
-  <view class="card muted" wx:if="{{locked}}">已有比分或进球，队伍锁定。</view>
 
   <view class="card" wx:if="{{!divided}}">
-    <view class="section-title">已报名 {{signedCount}} 人</view>
-    <view wx:if="{{!poolRows.length}}" class="empty">还没有人报名</view>
-    <view wx:for="{{poolRows}}" wx:key="left._id" class="pair">
-      <view class="name">{{item.left.userName}}</view>
-      <view class="name">{{item.right ? item.right.userName : ''}}</view>
+    <view class="roster-bar">
+      <view class="section-title" style="margin-bottom: 0;">已报名 {{signedCount}} 人</view>
+      <view wx:if="{{isAdmin}}" class="roster-bar-actions">
+        <view wx:if="{{!locked}}" class="roster-action-pill" bindtap="assignByRoster">按组分队</view>
+        <view class="roster-action-pill primary" bindtap="onTapJielongCup">{{cupStarted ? '重开界龙杯' : '开启界龙杯'}}</view>
+      </view>
     </view>
+    <view wx:if="{{!signedCount}}" class="empty">还没有人报名</view>
   </view>
 
   <block wx:else>
-    <view class="team-grid">
-      <view
-        wx:for="{{teamCards}}"
-        wx:key="id"
-        class="team-card"
-        data-id="{{item.id}}"
-        bindtap="moveToTeam"
-      >
-        <view class="team-head">
-          <view class="dot" style="background: {{item.color}};"></view>
-          <text class="team-name">{{item.name}} {{item.count}}</text>
-          <text wx:if="{{isAdmin}}" class="tiny" data-id="{{item.id}}" catchtap="editTeam">改名</text>
-        </view>
+    <view class="roster-bar">
+      <view class="roster-bar-title">
+        <text class="section-title" style="margin-bottom: 0;">分队名单</text>
+        <text class="roster-bar-sub">{{activeTeamCount}} 队 · {{activePlayerCount}} 人</text>
+      </view>
+      <view class="roster-bar-actions">
+        <view wx:if="{{isAdmin && !locked}}" class="roster-action-pill" bindtap="assignByRoster">按组分队</view>
+        <view wx:if="{{isAdmin}}" class="roster-action-pill primary" bindtap="onTapJielongCup">{{cupStarted ? '重开界龙杯' : '开启界龙杯'}}</view>
+      </view>
+    </view>
+    <view class="muted roster-tip" wx:if="{{isAdmin && draggingId}}">{{dragHint}}</view>
+    <view
+      class="roster-drag-area {{draggingId ? 'is-dragging' : ''}}"
+      catchtouchmove="{{draggingId ? 'onRosterTouchMove' : ''}}"
+      catchtouchend="{{draggingId ? 'onRosterTouchEnd' : ''}}"
+      catchtouchcancel="{{draggingId ? 'onRosterTouchEnd' : ''}}"
+    >
+      <view class="team-grid {{teamGridCols === 3 ? 'cols-3' : 'cols-2'}}">
         <view
-          wx:for="{{item.members}}"
-          wx:for-item="player"
-          wx:key="_id"
-          class="member {{selectedOpenid === player._openid ? 'on' : ''}}"
-          data-openid="{{player._openid}}"
-          data-name="{{player.userName}}"
-          catchtap="selectPlayer"
+          wx:for="{{teamCards}}"
+          wx:key="id"
+          class="team-card drop-team {{draggingId && !dragHoverOpenid && dragHoverTeam === item.id ? 'drop-hover' : ''}}"
+          data-team="{{item.id}}"
         >
-          {{player.userName}}
-          <view wx:if="{{isAdmin}}" class="goal-actions">
-            <text class="tiny" data-openid="{{player._openid}}" catchtap="addGoal">进球</text>
-            <text class="tiny" data-openid="{{player._openid}}" data-own="1" catchtap="addGoal">乌龙</text>
+          <view class="team-head">
+            <view
+              class="team-head-main {{isAdmin ? 'editable' : ''}}"
+              data-id="{{item.id}}"
+              catchtap="{{isAdmin ? 'editTeam' : ''}}"
+            >
+              <view class="dot" style="background: {{item.color}};"></view>
+              <text class="team-name">{{item.name}}</text>
+              <text class="team-count">{{item.count}}</text>
+              <text wx:if="{{isAdmin}}" class="team-edit-mark">✎</text>
+            </view>
+            <text
+              wx:if="{{canRemoveTeam && item.count === 0}}"
+              class="team-cut"
+              data-id="{{item.id}}"
+              catchtap="removeTeam"
+            >−</text>
+          </view>
+          <view
+            wx:for="{{item.members}}"
+            wx:for-item="player"
+            wx:key="_id"
+            class="member drop-player {{draggingId === player._openid ? 'is-source' : ''}} {{dragHoverOpenid === player._openid ? 'drop-hover-player' : ''}}"
+            data-openid="{{player._openid}}"
+            data-name="{{player.userName}}"
+            data-team="{{item.id}}"
+            bindtap="onTapPlayer"
+            bindlongpress="onDragStart"
+          >
+            <image wx:if="{{player.avatarUrl}}" class="avatar avatar-sm" src="{{player.avatarUrl}}" mode="aspectFill"/>
+            <view wx:else class="avatar-fallback avatar-sm" style="background: {{player.avatarBg}};">{{player.avatarChar}}</view>
+            <text class="member-name">{{player.userName}}</text>
+            <view wx:if="{{isAdmin}}" class="drag-handle" aria-hidden="true"></view>
+          </view>
+        </view>
+        <view wx:if="{{canAddTeam}}" class="team-card team-add" catchtap="addTeam">
+          <text class="team-add-plus">+</text>
+          <text class="team-add-label">加一队</text>
+        </view>
+      </view>
+
+      <view
+        class="pending-pool drop-team {{draggingId && !dragHoverOpenid && dragHoverTeam === 'team_pending' ? 'drop-hover' : ''}}"
+        data-team="team_pending"
+      >
+        <view class="pending-pool-head">
+          <text class="pending-pool-label">未分队池</text>
+          <text class="pending-pool-count">{{pendingCount}} 人</text>
+        </view>
+        <view wx:if="{{!pendingCount}}" class="pending-pool-empty">{{isAdmin ? '拖到这里或点选队员放入未分队' : '暂无未分队队员'}}</view>
+        <view wx:else class="pending-pool-chips">
+          <view
+            wx:for="{{pendingPlayers}}"
+            wx:for-item="player"
+            wx:key="_id"
+            class="pending-chip drop-player {{draggingId === player._openid ? 'is-source' : ''}} {{dragHoverOpenid === player._openid ? 'drop-hover-player' : ''}}"
+            data-openid="{{player._openid}}"
+            data-name="{{player.userName}}"
+            data-team="team_pending"
+            bindtap="onTapPlayer"
+            bindlongpress="onDragStart"
+          >
+            <image wx:if="{{player.avatarUrl}}" class="avatar avatar-sm" src="{{player.avatarUrl}}" mode="aspectFill"/>
+            <view wx:else class="avatar-fallback avatar-sm" style="background: {{player.avatarBg}};">{{player.avatarChar}}</view>
+            <text class="pending-chip-name">{{player.userName}}</text>
+            <view wx:if="{{isAdmin}}" class="drag-handle" aria-hidden="true"></view>
           </view>
         </view>
       </view>
     </view>
-
-    <view class="card" wx:if="{{pendingCount}}">
-      <view class="section-title">未分队 {{pendingCount}}</view>
-      <view wx:for="{{poolRows}}" wx:key="left._id" class="pair">
-        <view
-          class="name {{selectedOpenid === item.left._openid ? 'on' : ''}}"
-          data-openid="{{item.left._openid}}"
-          data-name="{{item.left.userName}}"
-          bindtap="selectPlayer"
-        >{{item.left.userName}}</view>
-        <view
-          wx:if="{{item.right}}"
-          class="name {{selectedOpenid === item.right._openid ? 'on' : ''}}"
-          data-openid="{{item.right._openid}}"
-          data-name="{{item.right.userName}}"
-          bindtap="selectPlayer"
-        >{{item.right.userName}}</view>
-        <view wx:else class="name"></view>
-      </view>
-      <view class="muted" wx:if="{{isAdmin && selectedOpenid}}">已选 {{selectedName}}，再点上面的队名放进去</view>
-    </view>
   </block>
 
-  <view class="card" wx:if="{{waitlistCount}}">
-    <view class="section-title">后补 {{waitlistCount}}</view>
-    <view wx:for="{{waitlistRows}}" wx:key="left._id" class="pair">
-      <view class="name muted">{{item.left.userName}}</view>
-      <view class="name muted">{{item.right ? item.right.userName : ''}}</view>
+  <view
+    id="tactics-card"
+    wx:if="{{divided && tacticsList.length}}"
+    class="card tactics-card"
+    catchtouchmove="{{tacticsDragPreviewActive ? 'onTacticsTouchMove' : ''}}"
+  >
+    <view class="tactics-head">
+      <view class="section-title" style="margin-bottom: 0;">战术板 · {{tacticsTeamName || '本队'}}</view>
+      <view class="tactics-badges">
+        <view class="tactics-badge">{{tacticsBoard.pitchBadgeText || '上场 0/9'}}</view>
+        <view wx:if="{{!canEditTactics}}" class="tactics-badge muted-badge">仅本队可改</view>
+      </view>
+    </view>
+    <view class="roster-chips tactics-team-tabs {{teamGridCols === 3 ? 'cols-3' : 'cols-2'}}">
+      <view
+        wx:for="{{tacticsList}}"
+        wx:key="teamId"
+        class="roster-chip {{tacticsTeamId === item.teamId ? 'on' : ''}}"
+        data-teamid="{{item.teamId}}"
+        bindtap="switchTacticsTeam"
+      >
+        <view wx:if="{{item.color}}" class="dot" style="background: {{item.color}};"></view>
+        <text>{{item.teamName}}</text>
+      </view>
+    </view>
+    <view wx:if="{{tacticsRemovedNotice}}" class="tactics-notice">{{tacticsRemovedNotice}}</view>
+
+    <view id="tacticsPitch" class="tactics-pitch">
+      <view class="pitch-line-box">
+        <view class="pitch-box-top"></view>
+        <view class="pitch-midline"></view>
+        <view class="pitch-circle"></view>
+        <view class="pitch-box-bottom"></view>
+      </view>
+
+      <view
+        wx:for="{{tacticsBoard.onPitch}}"
+        wx:key="userId"
+        class="pitch-free-slot {{tacticsDraggingUserId === item.userId ? 'dragging' : ''}} {{item.role === 'gk' ? 'is-gk' : ''}}"
+        style="left: {{item.leftPct}}%; top: {{item.topPct}}%;"
+        data-userid="{{item.userId}}"
+        data-source="pitch"
+        bindtouchstart="onTacticsTouchStart"
+        catchtouchmove="onTacticsTouchMove"
+        bindtouchend="onTacticsTouchEnd"
+        bindtouchcancel="onTacticsTouchEnd"
+      >
+        <view class="pitch-avatar-wrap">
+          <image wx:if="{{item.avatarUrl}}" class="pitch-avatar" src="{{item.avatarUrl}}" mode="aspectFill"/>
+          <view wx:else class="pitch-avatar pitch-avatar-fallback" style="background: {{item.avatarBg}};">{{item.avatarChar}}</view>
+          <view wx:if="{{item.role === 'gk'}}" class="pitch-role gk-role">{{item.shortLabel}}</view>
+        </view>
+        <view class="pitch-name">{{item.userName}}</view>
+      </view>
+
+      <view
+        wx:if="{{tacticsDragPreviewActive && tacticsDragPlayer}}"
+        class="pitch-free-slot drag-ghost"
+        style="left: {{tacticsDragPreviewLeft}}%; top: {{tacticsDragPreviewTop}}%;"
+      >
+        <view class="pitch-avatar-wrap">
+          <image wx:if="{{tacticsDragPlayer.avatarUrl}}" class="pitch-avatar" src="{{tacticsDragPlayer.avatarUrl}}" mode="aspectFill"/>
+          <view wx:else class="pitch-avatar pitch-avatar-fallback" style="background: {{tacticsDragPlayer.avatarBg}};">{{tacticsDragPlayer.avatarChar}}</view>
+        </view>
+        <view class="pitch-name">{{tacticsDragPlayer.userName}}</view>
+      </view>
+    </view>
+
+    <view id="tacticsBench" class="tactics-bench {{tacticsDragPreviewActive ? 'drop-target' : ''}}">
+      <view class="bench-head">
+        <view class="bench-title">候选池（{{tacticsBoard.bench.length}}人）</view>
+        <text wx:if="{{canEditTactics}}" class="bench-hint">拖上场 · 拖下场</text>
+      </view>
+      <view wx:if="{{!tacticsBoard.bench.length}}" class="bench-empty-drop">拖到这里下场</view>
+      <view wx:else class="bench-list">
+        <view
+          wx:for="{{tacticsBoard.bench}}"
+          wx:key="userId"
+          class="bench-chip {{tacticsDraggingUserId === item.userId ? 'selected' : ''}}"
+          data-userid="{{item.userId}}"
+          data-source="bench"
+          bindtouchstart="onTacticsTouchStart"
+          catchtouchmove="onTacticsTouchMove"
+          bindtouchend="onTacticsTouchEnd"
+          bindtouchcancel="onTacticsTouchEnd"
+        >
+          <image wx:if="{{item.avatarUrl}}" class="bench-avatar" src="{{item.avatarUrl}}" mode="aspectFill"/>
+          <view wx:else class="bench-avatar bench-avatar-fallback" style="background: {{item.avatarBg}};">{{item.avatarChar}}</view>
+          <view class="bench-name">{{item.userName}}</view>
+          <view class="bench-pos">{{item.positionLabel}}</view>
+        </view>
+      </view>
+    </view>
+
+    <button
+      class="btn save-lineup-btn"
+      loading="{{savingTacticsBoard}}"
+      disabled="{{!canEditTactics || savingTacticsBoard}}"
+      bindtap="saveActivityTacticsBoard"
+    >{{canEditTactics ? '保存阵容' : '仅正选可保存'}}</button>
+
+    <view class="tactics-actions">
+      <button class="btn soft tactics-btn" loading="{{exportingTactics}}" disabled="{{exportingTactics}}" bindtap="saveTacticsPoster">💾 保存到相册</button>
+      <button class="btn soft tactics-btn" loading="{{exportingTactics}}" disabled="{{exportingTactics}}" bindtap="shareTacticsPoster">📤 分享战术图</button>
     </view>
   </view>
 
-  <view class="card" wx:if="{{standings.length && rounds.length}}">
+  <canvas type="2d" id="tacticsCanvas" class="tactics-canvas"></canvas>
+
+  <view class="card" wx:if="{{pigeons.length}}">
+    <view class="section-title">🐦 本场鸽子</view>
+    <view wx:for="{{pigeons}}" wx:key="playerOpenid" class="pigeon-line">
+      <text>{{item.userName}}</text>
+      <text wx:if="{{item.absentBy === 'system'}}" class="tiny muted" style="margin-left: 8rpx;">（临期取消）</text>
+      <text wx:if="{{isAdmin && item._id}}" class="tiny danger" style="margin-left: auto;" data-id="{{item._id}}" data-name="{{item.userName}}" catchtap="askDeleteRecord">删除</text>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{showStandings}}">
     <view class="section-title">积分榜</view>
     <view class="table-head">
       <text class="col-name">队</text>
@@ -128,60 +277,317 @@
     </view>
   </view>
 
-  <view class="card" wx:if="{{rounds.length}}">
-    <view class="section-title">对战场次</view>
-    <view wx:for="{{rounds}}" wx:key="_id" class="match">
-      <view class="match-title">
-        第{{item.roundNo}}轮 · {{item.pitchId === 'pitch_1' ? '1号场' : '2号场'}}
-        <text wx:if="{{item.typeLabel}}"> · {{item.typeLabel}}</text>
+  <view class="card" wx:if="{{showFixtures}}">
+    <view class="fixture-card-head">
+      <view class="section-title" style="margin-bottom: 0;">轮次与对阵</view>
+      <view wx:if="{{isAdmin}}" class="fixture-top-btns">
+        <view wx:if="{{cupStarted}}" class="mini-btn ghost" bindtap="onTapJielongCup">重开界龙杯</view>
+        <view wx:elif="{{!locked && rounds.length}}" class="mini-btn ghost" bindtap="resetFixturesTap">清空对阵</view>
+        <view class="mini-btn" bindtap="openAddFixture">＋ 加一场</view>
       </view>
-      <view>{{item.left}} vs {{item.right}}</view>
-      <view class="muted">{{item.scoreText}}</view>
-      <view wx:if="{{isAdmin && item.scoreA == null}}" class="score-row">
-        <input class="score" type="number" data-id="{{item._id}}" data-side="a" bindinput="onScoreInput" placeholder="0" />
-        <text>:</text>
-        <input class="score" type="number" data-id="{{item._id}}" data-side="b" bindinput="onScoreInput" placeholder="0" />
-        <text class="link" data-id="{{item._id}}" bindtap="saveScore">记分</text>
-        <text class="link" data-round="{{item.roundNo}}" bindtap="swapPitch">换场</text>
+    </view>
+    <view class="pitch1-bar" wx:if="{{rounds.length && pitchOneSummary.length}}">
+      <text class="pitch1-label">📹 1号场：</text>
+      <view wx:for="{{pitchOneSummary}}" wx:key="id" class="pitch1-chip">
+        <view class="dot" style="background: {{item.color}};"></view>
+        <text>{{item.name}} {{item.count}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{!roundGroups.length && !rounds.length}}" class="empty">
+      暂无场次{{isAdmin ? '，点「＋ 加一场」开始排' : ''}}
+    </view>
+
+    <view wx:for="{{roundGroups}}" wx:for-item="group" wx:key="roundNo" class="round-dir">
+      <view class="round-dir-head">
+        <view class="round-dir-title-wrap">
+          <text class="round-dir-badge">{{group.title}}</text>
+          <text wx:if="{{group.byeText}}" class="round-bye">{{group.byeText}}</text>
+        </view>
+        <view wx:if="{{isAdmin}}" class="round-dir-actions">
+          <text wx:if="{{group.matches.length >= 2}}" class="tiny link" data-round="{{group.roundNo}}" bindtap="swapPitch">互换1/2号场</text>
+          <text class="tiny link" data-round="{{group.roundNo}}" bindtap="openAddFixture">＋本轮加场</text>
+          <text class="tiny danger" data-round="{{group.roundNo}}" bindtap="deleteRoundDirectory">删轮次</text>
+        </view>
+      </view>
+
+      <view wx:if="{{!group.matches.length}}" class="round-empty muted">
+        本轮暂无场次
+        <text wx:if="{{isAdmin}}" class="link" style="margin-left: 12rpx;" data-round="{{group.roundNo}}" bindtap="openAddFixture">＋添加对阵</text>
+      </view>
+
+      <view wx:for="{{group.matches}}" wx:for-item="item" wx:key="_id" class="match-card">
+        <view class="match-top">
+          <view class="pitch-tag {{item.pitchId === 'pitch_1' ? 'cam' : 'plain'}}">
+            {{item.pitchId === 'pitch_1' ? '📹 1号场 · 运镜' : '2号场'}}
+          </view>
+          <text wx:if="{{item.typeLabel}}" class="match-type-tag">{{item.typeLabel}}</text>
+          <view class="match-status {{item.scored ? 'done' : ''}}">{{item.scoreText}}</view>
+        </view>
+
+        <view class="match-vs-row">
+          <view class="match-team">
+            <view class="dot" style="background: {{item.leftColor}};"></view>
+            <text class="match-team-name">{{item.left}}</text>
+          </view>
+          <text class="match-vs">VS</text>
+          <view class="match-team right">
+            <text class="match-team-name">{{item.right}}</text>
+            <view class="dot" style="background: {{item.rightColor}};"></view>
+          </view>
+        </view>
+
+        <view wx:if="{{isAdmin}}" class="score-row">
+          <input class="score" type="number" value="{{scoreDraft[item._id].a}}" data-id="{{item._id}}" data-side="a" bindinput="onScoreInput" placeholder="—" />
+          <text class="score-colon">:</text>
+          <input class="score" type="number" value="{{scoreDraft[item._id].b}}" data-id="{{item._id}}" data-side="b" bindinput="onScoreInput" placeholder="—" />
+          <view class="mini-btn" data-id="{{item._id}}" bindtap="saveScore">{{item.scored ? '改比分' : '记比分'}}</view>
+        </view>
+
+        <view wx:if="{{isAdmin}}" class="fixture-actions">
+          <text wx:if="{{!item.scored}}" class="tiny link" data-id="{{item._id}}" bindtap="openEditFixture">修改场次</text>
+          <text wx:if="{{!item.scored}}" class="tiny link" data-id="{{item._id}}" bindtap="swapFixtureSides">对调主客</text>
+          <text wx:if="{{group.matches.length === 1}}" class="tiny link" data-round="{{item.roundNo}}" bindtap="swapPitch">切1/2号场</text>
+          <text class="tiny danger" data-id="{{item._id}}" bindtap="deleteFixtureTap">删除</text>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{isAdmin}}" class="add-dir-bar" bindtap="addRoundDirectory">＋ 新增下一轮目录</view>
+  </view>
+
+  <view wx:if="{{showPersonalData}}" class="card">
+    <view class="section-title">记录球员数据</view>
+    <view wx:if="{{signedMembers.length === 0}}" class="muted">这场还没有人报名。</view>
+    <block wx:else>
+      <view class="roster-chips" style="margin-bottom: 16rpx;">
+        <view
+          wx:for="{{memberFilters}}"
+          wx:key="id"
+          class="roster-chip {{memberTeam === item.id ? 'on' : ''}}"
+          data-id="{{item.id}}"
+          bindtap="onMemberTeam"
+        >{{item.name}}</view>
+      </view>
+      <view wx:if="{{pickMembers.length === 0}}" class="muted">这个队这场还没有人报名。</view>
+      <block wx:else>
+        <view class="roster-label">队员</view>
+        <picker mode="selector" range="{{pickMembers}}" range-key="label" value="{{pickIndex}}" bindchange="onPickPlayer">
+          <view class="picker-value">{{pickedLabel}}</view>
+        </picker>
+        <view class="stat-grid-form">
+          <view class="stat-form-col">
+            <view class="roster-label">⚽️ 进球</view>
+            <picker mode="selector" range="{{statOptions}}" value="{{goalIndex}}" bindchange="onEditGoals">
+              <view class="picker-value">{{statOptions[goalIndex]}}</view>
+            </picker>
+          </view>
+          <view class="stat-form-col">
+            <view class="roster-label">👟 助攻</view>
+            <picker mode="selector" range="{{statOptions}}" value="{{assistIndex}}" bindchange="onEditAssists">
+              <view class="picker-value">{{statOptions[assistIndex]}}</view>
+            </picker>
+          </view>
+          <view class="stat-form-col">
+            <view class="roster-label">🥅 乌龙球</view>
+            <picker mode="selector" range="{{statOptions}}" value="{{ownGoalIndex}}" bindchange="onEditOwnGoals">
+              <view class="picker-value">{{statOptions[ownGoalIndex]}}</view>
+            </picker>
+          </view>
+          <view class="stat-form-col">
+            <view class="roster-label">出勤情况</view>
+            <picker mode="selector" range="{{pigeonOptions}}" value="{{pigeonIndex}}" bindchange="onEditAbsent">
+              <view class="picker-value">{{pigeonOptions[pigeonIndex]}}</view>
+            </picker>
+          </view>
+        </view>
+        <button class="btn" loading="{{savingStat}}" bindtap="saveStat">保存球员数据</button>
+      </block>
+    </block>
+  </view>
+
+  <view class="card" wx:if="{{sessionOpen && (isAdmin || records.length)}}">
+    <view class="section-title">本场球员数据</view>
+    <view wx:if="{{records.length === 0}}" class="empty">还没有记录球员数据</view>
+    <view wx:for="{{records}}" wx:key="playerOpenid" class="stat-record-row">
+      <view class="record-who">
+        <image wx:if="{{item.avatarUrl}}" class="record-avatar" src="{{item.avatarUrl}}" mode="aspectFill"/>
+        <view wx:else class="record-avatar fallback" style="background: {{item.avatarBg}};">{{item.avatarChar}}</view>
+        <view class="record-who-text">
+          <text class="record-name">{{item.userName}}</text>
+          <text class="tiny muted">{{item.teamName}}</text>
+        </view>
+      </view>
+      <view wx:if="{{isAdmin && item.editable}}" class="stat-inline-pickers">
+        <picker mode="selector" range="{{statOptions}}" value="{{item.goalIndex}}" data-openid="{{item.playerOpenid}}" bindchange="onRowGoals">
+          <text class="stat-pill">⚽️ {{item.goals}}</text>
+        </picker>
+        <picker mode="selector" range="{{statOptions}}" value="{{item.assistIndex}}" data-openid="{{item.playerOpenid}}" bindchange="onRowAssists">
+          <text class="stat-pill">👟 {{item.assists}}</text>
+        </picker>
+        <picker mode="selector" range="{{statOptions}}" value="{{item.ownGoalIndex}}" data-openid="{{item.playerOpenid}}" bindchange="onRowOwnGoals">
+          <text class="stat-pill">🥅 {{item.ownGoals || 0}}</text>
+        </picker>
+        <picker mode="selector" range="{{pigeonOptions}}" value="{{item.pigeonIndex}}" data-openid="{{item.playerOpenid}}" bindchange="onRowAbsent">
+          <text class="stat-pill">{{item.absent ? '🐦 鸽子' : '正常'}}</text>
+        </picker>
+        <text wx:if="{{item.deletable}}" class="tiny danger" data-id="{{item._id}}" data-name="{{item.userName}}" catchtap="askDeleteRecord">删</text>
+      </view>
+      <view wx:else class="stat-inline-pickers">
+        <text class="muted">⚽️ {{item.goals}} · 👟 {{item.assists}} · 🥅 {{item.ownGoals || 0}} · {{item.absent ? '🐦 鸽子' : '正常'}}</text>
+        <text wx:if="{{isAdmin && item.deletable}}" class="tiny danger" data-id="{{item._id}}" data-name="{{item.userName}}" catchtap="askDeleteRecord">删</text>
       </view>
     </view>
   </view>
 
-  <view class="card" wx:if="{{goalEvents.length}}">
-    <view class="section-title">进球</view>
-    <view wx:for="{{goalEvents}}" wx:key="_id" class="goal">
-      {{item.isOwnGoal ? '乌龙' : '进球'}} {{item.scorerName}}
-      <text wx:if="{{item.assistName}}"> · 助攻 {{item.assistName}}</text>
+  <view wx:if="{{showRegister}}" class="share-mask" catchtouchmove="noop">
+    <view class="share-sheet">
+      <view class="title">{{hasProfile ? '加入界龙散客队并报名' : '注册并加入界龙散客队'}}</view>
+      <view class="muted">确认个人资料，并选择你的名册分组即可报名。</view>
+      <view class="reg-avatar-row">
+        <button class="avatar-chooser" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar">
+          <image wx:if="{{regAvatarUrl}}" class="avatar-img" src="{{regAvatarUrl}}" mode="aspectFill"/>
+          <text wx:else class="avatar-plus">+</text>
+        </button>
+        <view class="muted">点头像，选微信头像（选填）</view>
+      </view>
+      <view class="roster-label">昵称（必填）</view>
+      <input type="nickname" class="input reg-input" placeholder="点这里快捷填入微信昵称" value="{{regName}}" maxlength="16" bindinput="onRegName"/>
+      <view class="roster-label">擅长位置（选填）</view>
+      <view class="reg-positions">
+        <view
+          wx:for="{{positions}}"
+          wx:key="id"
+          class="reg-pos {{regPosition === item.id ? 'active' : ''}}"
+          data-id="{{item.id}}"
+          bindtap="onRegPosition"
+        >{{item.label}}</view>
+      </view>
+      <view class="roster-label">名册分组（必选）</view>
+      <view class="roster-chips">
+        <view
+          wx:for="{{rosterGroups}}"
+          wx:key="id"
+          class="roster-chip {{pickGroupId === item.id ? 'on' : ''}}"
+          data-id="{{item.id}}"
+          bindtap="onPickGroup"
+        >
+          <view class="dot" style="background: {{item.color}};"></view>
+          <text>{{item.name}}</text>
+        </view>
+      </view>
+      <button class="btn" loading="{{regSaving}}" disabled="{{regSaving}}" bindtap="submitRegister">保存并继续</button>
+      <button class="btn soft" bindtap="closeRegister">取消</button>
     </view>
   </view>
 
-  <view class="sheet" wx:if="{{showDivide}}">
-    <view class="sheet-mask" bindtap="closeDivide"></view>
-    <view class="sheet-body">
-      <view class="section-title">分成几队？</view>
-      <view class="chips">
+  <view wx:if="{{showPledge}}" class="share-mask" catchtouchmove="noop">
+    <view class="share-sheet">
+      <view class="title">{{pledgeTitle}}</view>
+      <view class="pledge-rule">{{pigeonRuleText}}</view>
+      <view class="muted" wx:if="{{pledgeHint}}">{{pledgeHint}}</view>
+      <button class="btn pledge-go" bindtap="confirmPledge">{{pledgeButtonText}}</button>
+      <button class="btn soft" bindtap="dismissPledge">先不报</button>
+    </view>
+  </view>
+
+  <view wx:if="{{showBasics}}" class="share-mask" catchtouchmove="noop">
+    <view class="share-sheet">
+      <view class="title">改场次</view>
+      <view class="muted">开赛前可改标题和时间。</view>
+      <view class="roster-label">标题</view>
+      <input class="input reg-input" value="{{basicsTitle}}" bindinput="onBasicsTitle" placeholder="本场标题"/>
+      <view class="roster-label">日期</view>
+      <picker mode="date" value="{{basicsDate}}" bindchange="onBasicsDate">
+        <view class="picker-value">{{basicsDate}}</view>
+      </picker>
+      <view class="roster-label">时间</view>
+      <picker mode="time" value="{{basicsTime}}" bindchange="onBasicsTime">
+        <view class="picker-value">{{basicsTime}}</view>
+      </picker>
+      <button class="btn" loading="{{basicsSaving}}" disabled="{{basicsSaving}}" bindtap="submitBasics">保存</button>
+      <button class="btn soft" bindtap="closeBasics">取消</button>
+    </view>
+  </view>
+
+  <view wx:if="{{showRename}}" class="share-mask" catchtouchmove="noop">
+    <view class="share-sheet">
+      <view class="title">改队名</view>
+      <view class="muted">可点名册组名填入，也可直接改字，选完还能再改。</view>
+      <view class="roster-label">名册组名</view>
+      <view class="roster-chips">
         <view
-          wx:for="{{teamCountOptions}}"
-          wx:key="*this"
-          class="chip {{pickTeamCount === item ? 'on' : ''}}"
-          data-value="{{item}}"
-          bindtap="onPickCount"
-        >{{item}} 队</view>
+          wx:for="{{rosterGroups}}"
+          wx:key="id"
+          class="roster-chip {{renameDraft === item.name ? 'on' : ''}}"
+          data-name="{{item.name}}"
+          bindtap="onPickRenameName"
+        >
+          <view class="dot" style="background: {{item.color}};"></view>
+          <text>{{item.name}}</text>
+        </view>
       </view>
-      <view class="section-title">每队大概几人？</view>
-      <view class="chips">
+      <view class="roster-label">队名</view>
+      <input class="input reg-input" value="{{renameDraft}}" bindinput="onRenameDraft" placeholder="输入队名"/>
+      <button class="btn" bindtap="submitRename">保存</button>
+      <button class="btn soft" bindtap="closeRename">取消</button>
+    </view>
+  </view>
+
+  <view wx:if="{{showFixtureModal}}" class="share-mask" catchtouchmove="noop">
+    <view class="share-sheet">
+      <view class="title">{{fixtureEditId ? '修改场次' : '添加场次'}}</view>
+      <view class="muted">选择所属轮次目录、比赛场地与对阵双方。</view>
+
+      <view class="roster-label">所属轮次</view>
+      <view wx:if="{{fixtureRoundLocked}}" class="picker-value">{{fixtureRoundOptions[fixtureRoundIndex].label}}（本轮）</view>
+      <picker wx:else mode="selector" range="{{fixtureRoundOptions}}" range-key="label" value="{{fixtureRoundIndex}}" bindchange="onPickFixtureRound">
+        <view class="picker-value">{{fixtureRoundOptions[fixtureRoundIndex].label}}</view>
+      </picker>
+
+      <view class="roster-label">比赛场地</view>
+      <view class="roster-chips">
+        <view class="roster-chip {{fixturePitchId === 'pitch_1' ? 'on' : ''}}" data-pitch="pitch_1" bindtap="onPickFixturePitch">📹 1号场（有运镜）</view>
+        <view class="roster-chip {{fixturePitchId === 'pitch_2' ? 'on' : ''}}" data-pitch="pitch_2" bindtap="onPickFixturePitch">2号场（无运镜）</view>
+      </view>
+
+      <view class="roster-label">场次性质</view>
+      <view class="roster-chips">
+        <view class="roster-chip {{fixtureMatchType === 'group' ? 'on' : ''}}" data-type="group" bindtap="onPickFixtureType">常规/小组赛</view>
+        <view class="roster-chip {{fixtureMatchType === 'final' ? 'on' : ''}}" data-type="final" bindtap="onPickFixtureType">冠亚军</view>
+        <view class="roster-chip {{fixtureMatchType === 'third' ? 'on' : ''}}" data-type="third" bindtap="onPickFixtureType">季军赛</view>
+      </view>
+
+      <view class="roster-label">主队（左）</view>
+      <view class="roster-chips">
         <view
-          wx:for="{{sizeOptions}}"
-          wx:key="*this"
-          class="chip {{pickSize === item ? 'on' : ''}}"
-          data-value="{{item}}"
-          bindtap="onPickSize"
-        >{{item}} 人</view>
+          wx:for="{{activity.teams}}"
+          wx:key="id"
+          class="roster-chip {{fixtureTeamAId === item.id ? 'on' : ''}}"
+          data-id="{{item.id}}"
+          bindtap="onPickFixtureTeamA"
+        >
+          <view class="dot" style="background: {{item.color}};"></view>
+          <text>{{item.name}}</text>
+        </view>
       </view>
-      <view class="muted">{{divideHint}}</view>
-      <view class="muted" wx:if="{{pickTeamCount >= 4}}">分成 4、5、6 队会自动生成对战场次。</view>
-      <button class="btn" bindtap="confirmDivide">确认分队</button>
-      <button class="btn soft" bindtap="closeDivide">取消</button>
+
+      <view class="roster-label">客队（右）</view>
+      <view class="roster-chips">
+        <view
+          wx:for="{{activity.teams}}"
+          wx:key="id"
+          class="roster-chip {{fixtureTeamBId === item.id ? 'on' : ''}}"
+          data-id="{{item.id}}"
+          bindtap="onPickFixtureTeamB"
+        >
+          <view class="dot" style="background: {{item.color}};"></view>
+          <text>{{item.name}}</text>
+        </view>
+      </view>
+
+      <button class="btn" loading="{{fixtureSaving}}" disabled="{{fixtureSaving}}" bindtap="submitFixtureModal">保存场次</button>
+      <button class="btn soft" bindtap="closeFixtureModal">取消</button>
     </view>
   </view>
 </view>

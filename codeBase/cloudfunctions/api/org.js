@@ -10,24 +10,26 @@ const {
   CLUB_JIELONG,
   PENDING_TEAM,
   JIELONG_DEFAULT_GROUP,
+  SESSION_TEAM_STYLES,
   CLUB_SEEDS,
   clubSeed,
+  pigeonCutoffHours,
   membershipView,
   withClubMembership,
   renameGroup,
   recolorGroup,
   reorderGroups,
-  dividePlayers,
+  divideByRosterGroups,
+  autoSessionPlacement,
   placeInPool,
   assertAdminMove,
   rosterLocked,
   cupFixtures,
   shouldAutoFixture,
+  evaluateJielongCup,
   rankTeams,
   finalsForFour,
-  normalizeGoalEvent,
-  normalizeTargetSize,
-  normalizeTeamCount
+  normalizeGoalEvent
 } = require('./clubs')
 
 const db = cloud.database()
@@ -106,16 +108,19 @@ async function ensureOrg() {
       groups: seed.groups,
       config: seed.config
     })
-    // 已建档但 groups 为空时补种子六组（界龙曾短暂写成无常驻组）
-    if ((seed.groups || []).length) {
-      try {
-        const existing = await db.collection('clubs').doc(seed._id).get()
-        if (!(existing.data && existing.data.groups && existing.data.groups.length)) {
-          await db.collection('clubs').doc(seed._id).update({ data: { groups: seed.groups } })
-        }
-      } catch (error) {
-        // ignore
+    // 已建档：同步种子名；groups 为空时补种子六组（界龙曾短暂写成无常驻组）
+    try {
+      const existing = await db.collection('clubs').doc(seed._id).get()
+      const patch = {}
+      if (existing.data && existing.data.name !== seed.name) patch.name = seed.name
+      if ((seed.groups || []).length && !(existing.data && existing.data.groups && existing.data.groups.length)) {
+        patch.groups = seed.groups
       }
+      if (Object.keys(patch).length) {
+        await db.collection('clubs').doc(seed._id).update({ data: patch })
+      }
+    } catch (error) {
+      // ignore
     }
     await putIfMissing('club_venues', `${seed._id}__${VENUE_JIELONG._id}`, {
       clubId: seed._id,
@@ -292,12 +297,6 @@ async function createActivity(openid, event) {
   if (!title) throw new Error('请填写标题')
   if (!location) throw new Error('请填写地点')
   if (!startTime) throw new Error('请选择时间')
-  let maxSignedPlayers = event.maxSignedPlayers == null
-    ? (club.config.maxSignedPlayers || 40)
-    : Number(event.maxSignedPlayers)
-  if (!Number.isInteger(maxSignedPlayers) || maxSignedPlayers < 1 || maxSignedPlayers > 99) {
-    throw new Error('本场报名上限不合法')
-  }
   const added = await db.collection('activities').add({
     data: {
       title,
@@ -314,7 +313,9 @@ async function createActivity(openid, event) {
       teamCount: 0,
       targetPerTeam: club.config.defaultTeamSize || 8,
       divided: false,
-      maxSignedPlayers,
+      manualRoster: false,
+      cupStarted: false,
+      cupTeamIds: [],
       createdBy: openid,
       createdAt: Date.now()
     }
@@ -345,94 +346,101 @@ async function updateActivityBasics(openid, event) {
     data.startTime = startTime
     data.endTime = startTime + 2 * 60 * 60 * 1000
   }
-  if (activity.clubId === CLUB_JIELONG && event.maxSignedPlayers != null) {
-    const maxSignedPlayers = Number(event.maxSignedPlayers)
-    const signed = await db.collection('signups').where({ activityId: activity._id, status: 'signed' }).count()
-    if (!Number.isInteger(maxSignedPlayers) || maxSignedPlayers < signed.total) {
-      throw new Error('报名上限不能低于已报名正选')
-    }
-    data.maxSignedPlayers = maxSignedPlayers
-  }
   await db.collection('activities').doc(activity._id).update({ data })
   return { activityId: activity._id }
+}
+
+function activityWindowEnd(activity) {
+  if (activity && Number(activity.endTime) > 0) return Number(activity.endTime)
+  const start = Number(activity && activity.startTime) || 0
+  return start + 2 * 60 * 60 * 1000
 }
 
 async function signup(openid, event) {
   const user = await requireUser(openid)
   const activity = await mustGet('activities', event.activityId)
-  if (activity.clubId !== CLUB_JIELONG) throw new Error('这场不是界龙散客')
-  if (activity.startTime <= Date.now()) throw new Error('活动已开始，报名已截止。')
+  if (activity.clubId !== CLUB_JIELONG) throw new Error('这场不是界龙散客队')
+  // 散客允许开赛后补报；活动结束后才截止。迟到的人先进未分队/自动队，由管理员拉组上战术板候选池
+  if (activityWindowEnd(activity) <= Date.now()) throw new Error('活动已结束，不能报名')
   const club = await loadClub(CLUB_JIELONG)
   let view = membershipView(user, CLUB_JIELONG)
-  const rosterGroupId = resolveJielongGroupId(club, event.groupId || view.groupId)
-  if (!view.joined) {
+  // 报名不再顺带入队/改名册组；未入队先走 joinClub，名册组在入队时选定
+  if (!view.joined) throw new Error('请先加入界龙散客队')
+  if (!view.groupId) {
+    const rosterGroupId = resolveJielongGroupId(club, '')
     const memberships = withClubMembership(user.memberships, CLUB_JIELONG, {
-      role: 'member',
+      role: view.role === 'member' ? 'member' : view.role,
       groupId: rosterGroupId
     })
     await db.collection('users').doc(user._id).update({
-      data: { memberships, currentClubId: CLUB_JIELONG, updatedAt: Date.now() }
+      data: { memberships, updatedAt: Date.now() }
     })
     view = membershipView({ ...user, memberships }, CLUB_JIELONG)
-  } else if (!view.groupId || view.groupId !== rosterGroupId) {
-    // 已入队但未设名册组，或本次报名带了新选组：写入/更新
-    if (!view.groupId || (event.groupId && event.groupId !== view.groupId)) {
-      const memberships = withClubMembership(user.memberships, CLUB_JIELONG, {
-        role: view.role === 'member' ? 'member' : view.role,
-        groupId: rosterGroupId
-      })
-      await db.collection('users').doc(user._id).update({
-        data: { memberships, updatedAt: Date.now() }
-      })
-      view = membershipView({ ...user, memberships }, CLUB_JIELONG)
-    }
   }
-  const signed = await db.collection('signups').where({ activityId: activity._id, status: 'signed' }).count()
-  const waiting = await db.collection('signups').where({ activityId: activity._id, status: 'waitlist' }).count()
-  const placed = placeInPool({
-    signedCount: signed.total,
-    waitlistCount: waiting.total,
-    maxSignedPlayers: activity.maxSignedPlayers || 40,
-    waitlistLimit: club.config.waitlistLimit || 12
-  })
-  const hours = event.waitHours == null ? defaultWaitHours(activity.startTime, Date.now()) : Number(event.waitHours)
+  const placed = placeInPool()
+  const manualRoster = !!(activity.manualRoster || activity.cupStarted)
+  const teamSize = activity.targetPerTeam || club.config.defaultTeamSize || 8
+  let placement = null
+  let assignedTeamId = PENDING_TEAM
   await db.runTransaction(async (transaction) => {
     const existing = await transaction.collection('signups').where({
       activityId: activity._id, _openid: openid
     }).limit(1).get()
     const current = existing.data[0]
     if (current && (current.status === 'signed' || current.status === 'waitlist')) throw new Error('你已经报名了')
-    if (placed.status === 'signed') {
+    if (!manualRoster) {
       const allSigned = await transaction.collection('signups').where({
         activityId: activity._id, status: 'signed'
       }).limit(100).get()
-      if (allSigned.data.length >= (activity.maxSignedPlayers || 40)) throw new Error('本场已满')
+      const livePlacement = autoSessionPlacement(allSigned.data.length, activity.teams || [], teamSize)
+      placement = livePlacement
+      assignedTeamId = livePlacement.teamId
+    } else {
+      assignedTeamId = PENDING_TEAM
     }
+    const sessionOrder = await nextSessionOrder(transaction, activity._id, assignedTeamId)
     const data = {
       activityId: activity._id,
       clubId: CLUB_JIELONG,
-      teamId: placed.teamId,
+      teamId: assignedTeamId,
+      sessionOrder,
       _openid: openid,
       userName: user.name,
       avatarUrl: user.avatarUrl || '',
-      status: placed.status,
+      status: 'signed',
       remindAccepted: !!event.remindAccepted,
       promoteAccepted: !!event.promoteAccepted,
       remindSent: false,
       updatedAt: Date.now()
     }
-    if (placed.status === 'waitlist') {
-      data.waitlistOrder = Date.now()
-      data.waitHours = hours
-      data.waitUntil = waitUntilAt(activity.startTime, hours, Date.now())
-    }
     if (current) await transaction.collection('signups').doc(current._id).update({ data })
     else await transaction.collection('signups').add({ data: Object.assign({ createdAt: Date.now() }, data) })
   })
+  // 重新报名正选时清除系统鸽子
+  const pigeonFound = await db.collection('contributions').where({
+    activityId: activity._id, playerOpenid: openid
+  }).limit(1).get()
+  const pigeonRow = pigeonFound.data[0]
+  if (pigeonRow && pigeonRow.absent && pigeonRow.absentBy === 'system') {
+    await db.collection('contributions').doc(pigeonRow._id).update({
+      data: { absent: false, absentBy: '', pigeonAt: 0, updatedAt: Date.now() }
+    })
+  }
+  if (!manualRoster && placement) {
+    await db.collection('activities').doc(activity._id).update({
+      data: {
+        teams: placement.teams,
+        teamCount: placement.teamCount,
+        targetPerTeam: teamSize,
+        divided: true,
+        updatedAt: Date.now()
+      }
+    })
+  }
   return {
-    signed: placed.status === 'signed',
-    waitlist: placed.status === 'waitlist',
-    teamId: placed.teamId,
+    signed: true,
+    waitlist: false,
+    teamId: assignedTeamId,
     via: placed.via,
     label: placed.label
   }
@@ -470,64 +478,94 @@ async function writeFixtures(activityId, teamIds) {
   return fixtures.length
 }
 
+async function syncSessionFixtures(activityId, teams) {
+  const ids = (teams || []).map((team) => team.id)
+  if (shouldAutoFixture(ids.length)) {
+    return writeFixtures(activityId, ids)
+  }
+  await clearRounds(activityId)
+  return 0
+}
+
 async function assignTeams(openid, event) {
   const user = await requireUser(openid)
   assertClubAdmin(user, CLUB_JIELONG)
   const activity = await mustGet('activities', event.activityId)
-  if (activity.clubId !== CLUB_JIELONG) throw new Error('只有界龙散客可以分队')
+  if (activity.clubId !== CLUB_JIELONG) throw new Error('只有界龙散客队可以分队')
   await assertRosterOpen(activity)
-  const teamCount = normalizeTeamCount(event.teamCount)
-  const targetPerTeam = normalizeTargetSize(event.targetPerTeam == null ? 8 : event.targetPerTeam)
+  const club = await loadClub(CLUB_JIELONG)
   const signed = await db.collection('signups').where({
     activityId: activity._id,
     status: 'signed'
   }).limit(100).get()
   const ordered = signed.data.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
   if (!ordered.length) throw new Error('还没有人报名，先等几个人再分')
-  const plan = dividePlayers(ordered, teamCount, targetPerTeam)
+  const users = await db.collection('users').limit(200).get()
+  const groupOf = {}
+  ;(users.data || []).forEach((row) => {
+    const view = membershipView(row, CLUB_JIELONG)
+    if (row._openid) groupOf[row._openid] = view.groupId || ''
+  })
+  const plan = divideByRosterGroups(
+    ordered,
+    (playerOpenid) => groupOf[playerOpenid] || '',
+    club.groups || []
+  )
   for (const team of plan.teams) {
-    for (const player of plan.assignments[team.id] || []) {
-      await db.collection('signups').doc(player._id).update({
-        data: { teamId: team.id, updatedAt: Date.now() }
+    const players = plan.assignments[team.id] || []
+    for (let index = 0; index < players.length; index += 1) {
+      await db.collection('signups').doc(players[index]._id).update({
+        data: { teamId: team.id, sessionOrder: index, updatedAt: Date.now() }
       })
     }
   }
-  for (const player of plan.leftover) {
-    await db.collection('signups').doc(player._id).update({
-      data: { teamId: PENDING_TEAM, updatedAt: Date.now() }
-    })
-  }
-  let fixtureCount = 0
-  if (shouldAutoFixture(teamCount)) {
-    fixtureCount = await writeFixtures(activity._id, plan.teams.map((team) => team.id))
-  } else {
-    await clearRounds(activity._id)
-  }
+  const fixtureCount = 0
+  const targetPerTeam = activity.targetPerTeam || club.config.defaultTeamSize || 8
   await db.collection('activities').doc(activity._id).update({
     data: {
       teams: plan.teams,
-      teamCount,
+      teamCount: plan.teams.length,
       targetPerTeam,
       divided: true,
+      manualRoster: true,
       updatedAt: Date.now()
     }
   })
   return {
-    teamCount,
+    teamCount: plan.teams.length,
     targetPerTeam,
     assignedCount: plan.assignedCount,
-    leftoverCount: plan.leftover.length,
+    leftoverCount: 0,
     fixtureCount,
-    teams: plan.teams
+    teams: plan.teams,
+    byRoster: true
   }
+}
+
+function sessionOrderKey(row) {
+  if (row && Number.isFinite(row.sessionOrder)) return row.sessionOrder
+  return (row && row.createdAt) || 0
+}
+
+async function nextSessionOrder(transaction, activityId, teamId) {
+  const found = await transaction.collection('signups').where({
+    activityId, teamId, status: 'signed'
+  }).limit(100).get()
+  let max = 0
+  ;(found.data || []).forEach((row) => {
+    const key = sessionOrderKey(row)
+    if (key > max) max = key
+  })
+  return max + 1
 }
 
 async function adminMoveSignup(openid, event) {
   const activity = await mustGet('activities', event.activityId)
   const user = await requireUser(openid)
-  assertClubAdmin(user, activity.clubId || CLUB_WEDNESDAY)
   if (activity.clubId !== CLUB_JIELONG) throw new Error('周三联请用原来的换组')
-  await assertRosterOpen(activity)
+  assertClubAdmin(user, CLUB_JIELONG)
+  const targetOpenid = String(event.targetOpenid || openid || '').trim()
+  // 散客中途常要换人：有比分仍可挪人/进未分队；一键重分与加减队仍走 assertRosterOpen
   const next = assertAdminMove({
     locked: false,
     teams: activity.teams || [],
@@ -535,14 +573,22 @@ async function adminMoveSignup(openid, event) {
   })
   await db.runTransaction(async (transaction) => {
     const found = await transaction.collection('signups').where({
-      activityId: activity._id, _openid: event.targetOpenid, status: 'signed'
+      activityId: activity._id, _openid: targetOpenid, status: 'signed'
     }).limit(1).get()
     const current = found.data[0]
     if (!current) throw new Error('只能移动本场正选')
+    if (current.teamId === next.teamId) return
+    // 挪到新组：默认排在该组最下面
+    const sessionOrder = await nextSessionOrder(transaction, activity._id, next.teamId)
     await transaction.collection('signups').doc(current._id).update({
-      data: { teamId: next.teamId, updatedAt: Date.now() }
+      data: { teamId: next.teamId, sessionOrder, updatedAt: Date.now() }
     })
   })
+  if (!activity.manualRoster) {
+    await db.collection('activities').doc(activity._id).update({
+      data: { manualRoster: true, updatedAt: Date.now() }
+    })
+  }
   return { teamId: next.teamId }
 }
 
@@ -551,7 +597,7 @@ async function adminSwapSignup(openid, event) {
   const user = await requireUser(openid)
   assertClubAdmin(user, activity.clubId || CLUB_WEDNESDAY)
   if (activity.clubId !== CLUB_JIELONG) throw new Error('周三联请用原来的对调')
-  await assertRosterOpen(activity)
+  // 有比分仍允许对调人员；对阵与比分记录不受影响
   await db.runTransaction(async (transaction) => {
     const load = async (id) => {
       const found = await transaction.collection('signups').where({
@@ -564,10 +610,98 @@ async function adminSwapSignup(openid, event) {
     const b = await load(event.openidB)
     if (a.teamId === b.teamId) throw new Error('两人已在同一队')
     const now = Date.now()
-    await transaction.collection('signups').doc(a._id).update({ data: { teamId: b.teamId, updatedAt: now } })
-    await transaction.collection('signups').doc(b._id).update({ data: { teamId: a.teamId, updatedAt: now } })
+    // 对调：互换队伍，并互换组内顺序位置
+    const orderA = sessionOrderKey(a)
+    const orderB = sessionOrderKey(b)
+    await transaction.collection('signups').doc(a._id).update({
+      data: { teamId: b.teamId, sessionOrder: orderB, updatedAt: now }
+    })
+    await transaction.collection('signups').doc(b._id).update({
+      data: { teamId: a.teamId, sessionOrder: orderA, updatedAt: now }
+    })
   })
+  if (!activity.manualRoster) {
+    await db.collection('activities').doc(activity._id).update({
+      data: { manualRoster: true, updatedAt: Date.now() }
+    })
+  }
   return { swapped: true }
+}
+
+async function addSessionTeam(openid, event) {
+  const user = await requireUser(openid)
+  const activity = await mustGet('activities', event.activityId)
+  assertClubAdmin(user, CLUB_JIELONG)
+  if (activity.clubId !== CLUB_JIELONG) throw new Error('只有界龙散客队可以加队')
+  if (!activity.divided) throw new Error('先分队再加队')
+  await assertRosterOpen(activity)
+  const teams = (activity.teams || []).slice()
+  if (teams.length >= SESSION_TEAM_STYLES.length) throw new Error(`最多 ${SESSION_TEAM_STYLES.length} 队`)
+  const used = new Set(teams.map((team) => team.id))
+  const style = SESSION_TEAM_STYLES.find((item) => !used.has(item.id))
+  if (!style) throw new Error('没有可用的队模板')
+  const next = teams.concat([Object.assign({}, style)])
+  const fixtureCount = 0
+  await db.collection('activities').doc(activity._id).update({
+    data: {
+      teams: next,
+      teamCount: next.length,
+      manualRoster: true,
+      updatedAt: Date.now()
+    }
+  })
+  return { teams: next, teamCount: next.length, fixtureCount }
+}
+
+async function removeSessionTeam(openid, event) {
+  const user = await requireUser(openid)
+  const activity = await mustGet('activities', event.activityId)
+  assertClubAdmin(user, CLUB_JIELONG)
+  if (activity.clubId !== CLUB_JIELONG) throw new Error('只有界龙散客队可以删队')
+  if (!activity.divided) throw new Error('先分队再删队')
+  await assertRosterOpen(activity)
+  const teamId = String(event.teamId || '').trim()
+  const teams = activity.teams || []
+  if (!teams.some((team) => team.id === teamId)) throw new Error('找不到这个队')
+  if (teams.length <= 2) throw new Error('至少保留 2 队')
+  const signed = await db.collection('signups').where({
+    activityId: activity._id, teamId, status: 'signed'
+  }).count()
+  if (signed.total > 0) throw new Error('队里还有人，先调走再删')
+  const fixtureHits = await db.collection('rounds').where({
+    activityId: activity._id,
+    teamAId: teamId
+  }).limit(1).get()
+  const fixtureHitsB = await db.collection('rounds').where({
+    activityId: activity._id,
+    teamBId: teamId
+  }).limit(1).get()
+  if ((fixtureHits.data || []).length || (fixtureHitsB.data || []).length) {
+    throw new Error('这队还在对阵里，先删相关场次再删队')
+  }
+  const next = teams.filter((team) => team.id !== teamId)
+  const fixtureCount = 0
+  try {
+    const boards = await db.collection('tactics_boards').where({
+      scope: 'activity',
+      activityId: activity._id,
+      teamId
+    }).limit(10).get()
+    for (const doc of boards.data || []) {
+      await db.collection('tactics_boards').doc(doc._id).remove()
+    }
+  } catch (e) {
+    // 忽略未创建集合
+  }
+  await db.collection('activities').doc(activity._id).update({
+    data: {
+      teams: next,
+      teamCount: next.length,
+      manualRoster: true,
+      updatedAt: Date.now()
+    }
+  })
+  return { teams: next, teamCount: next.length, fixtureCount }
 }
 
 async function setSessionColor(openid, event) {
@@ -591,15 +725,14 @@ async function setSessionColor(openid, event) {
 
 async function cancel(openid, event) {
   const activity = await mustGet('activities', event.activityId)
-  if (activity.clubId !== CLUB_JIELONG) throw new Error('这场不是界龙散客')
-  if (activity.startTime <= Date.now()) throw new Error('活动已开始，报名已截止。')
+  if (activity.clubId !== CLUB_JIELONG) throw new Error('这场不是界龙散客队')
+  if (activityWindowEnd(activity) <= Date.now()) throw new Error('活动已结束，不能取消报名')
   const existing = await db.collection('signups').where({
     activityId: activity._id, _openid: openid, status: _.in(['signed', 'waitlist'])
   }).limit(1).get()
   const current = existing.data[0]
   if (!current) throw new Error('你还没有报名')
-  const club = await loadClub(CLUB_JIELONG)
-  const hours = club.config.cancelSignedCutoffHours
+  const hours = pigeonCutoffHours(CLUB_JIELONG)
   const now = Date.now()
   const recordPigeon = willRecordPigeon(activity.startTime, now, current.status, hours)
   await db.runTransaction(async (transaction) => {
@@ -627,59 +760,210 @@ async function cancel(openid, event) {
     if (found.data[0]) await transaction.collection('contributions').doc(found.data[0]._id).update({ data })
     else await transaction.collection('contributions').add({ data: Object.assign({ createdAt: now }, data) })
   })
-  if (current.status === 'signed') await promote(activity)
   return { signed: false, pigeon: recordPigeon }
 }
 
-async function promote(activity) {
-  const cap = activity.maxSignedPlayers || 40
-  const signed = await db.collection('signups').where({
-    activityId: activity._id, status: 'signed'
-  }).count()
-  if (signed.total >= cap) return
-  const waiting = await db.collection('signups').where({
-    activityId: activity._id, status: 'waitlist'
-  }).limit(50).get()
-  const next = waiting.data.slice().sort((a, b) => (a.waitlistOrder || 0) - (b.waitlistOrder || 0))[0]
-  if (!next) return
-  if (next.waitUntil && next.waitUntil <= Date.now()) {
-    await db.collection('signups').doc(next._id).update({ data: { status: 'cancelled', updatedAt: Date.now() } })
-    return promote(activity)
-  }
-  const teamId = activity.divided ? PENDING_TEAM : PENDING_TEAM
-  await db.collection('signups').doc(next._id).update({
-    data: { status: 'signed', teamId, updatedAt: Date.now() }
-  })
-}
+async function promote() {}
 
 async function saveFixtureScore(openid, event) {
   const user = await requireUser(openid)
   assertClubAdmin(user, CLUB_JIELONG)
   const round = await mustGet('rounds', event.roundId)
   const activity = await mustGet('activities', round.activityId)
-  if (!shouldAutoFixture(activity.teamCount || (activity.teams || []).length)) {
-    throw new Error('这场没有对战场次')
+  if (activity.clubId !== CLUB_JIELONG) {
+    throw new Error('这场不是界龙散客队')
   }
-  const scoreA = Number(event.scoreA)
-  const scoreB = Number(event.scoreB)
-  if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB) || scoreA < 0 || scoreB < 0 || scoreA > 99 || scoreB > 99) {
-    throw new Error('比分请填 0 到 99 的整数')
+  const clear = !!event.clear || (event.scoreA == null && event.scoreB == null)
+  let scoreA = null
+  let scoreB = null
+  if (!clear) {
+    scoreA = Number(event.scoreA)
+    scoreB = Number(event.scoreB)
+    if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB) || scoreA < 0 || scoreB < 0 || scoreA > 99 || scoreB > 99) {
+      throw new Error('比分请填 0 到 99 的整数')
+    }
   }
   await db.collection('rounds').doc(round._id).update({ data: { scoreA, scoreB } })
   const rounds = await db.collection('rounds').where({ activityId: activity._id }).limit(40).get()
-  const ids = (activity.teams || []).map((team) => team.id)
+  const cupStarted = !!activity.cupStarted
+  const cupIds = (cupStarted && Array.isArray(activity.cupTeamIds) && activity.cupTeamIds.length)
+    ? activity.cupTeamIds
+    : (activity.teams || []).map((team) => team.id)
   const merged = rounds.data.map((item) => (item._id === round._id ? Object.assign({}, item, { scoreA, scoreB }) : item))
   const hasFinal = merged.some((item) => item.matchType === 'final')
-  if (!hasFinal && ids.length === 4) {
-    const finals = finalsForFour(ids, merged, activity.tiebreakOrder)
+  if (cupStarted && !clear && !hasFinal && cupIds.length === 4) {
+    const finals = finalsForFour(cupIds, merged, activity.tiebreakOrder)
     for (const fixture of finals) {
       await db.collection('rounds').add({
         data: Object.assign({ activityId: activity._id, createdAt: Date.now() }, fixture)
       })
     }
   }
-  const table = rankTeams(ids, merged, activity.tiebreakOrder)
+  const table = cupStarted ? rankTeams(cupIds, merged, activity.tiebreakOrder) : []
   return { scoreA, scoreB, table }
+}
+
+async function startJielongCup(openid, event) {
+  const user = await requireUser(openid)
+  assertClubAdmin(user, CLUB_JIELONG)
+  const activity = await mustGet('activities', event.activityId)
+  if (activity.clubId !== CLUB_JIELONG) throw new Error('这场不是界龙散客队')
+  if (!activity.divided || !(activity.teams || []).length) throw new Error('请先分队再开启界龙杯')
+  const rounds = await db.collection('rounds').where({ activityId: activity._id }).limit(40).get()
+  if (rosterLocked(rounds.data, [])) {
+    throw new Error('已有场次记录了比分，请先清空比分')
+  }
+  const signed = await db.collection('signups').where({
+    activityId: activity._id,
+    status: 'signed'
+  }).limit(100).get()
+  const evalResult = evaluateJielongCup(activity.teams || [], signed.data || [])
+  if (!evalResult.eligible) {
+    if (activity.cupStarted && event.exitToManual) {
+      await clearRounds(activity._id)
+      await db.collection('activities').doc(activity._id).update({
+        data: {
+          cupStarted: false,
+          cupTeamIds: [],
+          updatedAt: Date.now()
+        }
+      })
+      return {
+        cupStarted: false,
+        cupTeamIds: [],
+        activeTeamCount: evalResult.activeTeamIds.length,
+        activePlayerCount: evalResult.activePlayerCount,
+        fixtureCount: 0,
+        exitedToManual: true
+      }
+    }
+    throw new Error(evalResult.reason)
+  }
+  const fixtureCount = await writeFixtures(activity._id, evalResult.activeTeamIds)
+  await db.collection('activities').doc(activity._id).update({
+    data: {
+      cupStarted: true,
+      cupTeamIds: evalResult.activeTeamIds,
+      manualRoster: true,
+      updatedAt: Date.now()
+    }
+  })
+  return {
+    cupStarted: true,
+    cupTeamIds: evalResult.activeTeamIds,
+    activeTeamCount: evalResult.activeTeamIds.length,
+    activePlayerCount: evalResult.activePlayerCount,
+    fixtureCount
+  }
+}
+
+async function clearFixtureScores(openid, event) {
+  const user = await requireUser(openid)
+  assertClubAdmin(user, CLUB_JIELONG)
+  const activity = await mustGet('activities', event.activityId)
+  if (activity.clubId !== CLUB_JIELONG) throw new Error('这场不是界龙散客队')
+  const rounds = await db.collection('rounds').where({ activityId: activity._id }).limit(40).get()
+  let cleared = 0
+  for (const round of rounds.data || []) {
+    if (round.scoreA != null || round.scoreB != null) {
+      await db.collection('rounds').doc(round._id).update({
+        data: { scoreA: null, scoreB: null }
+      })
+      cleared += 1
+    }
+  }
+  return { cleared }
+}
+
+async function addFixture(openid, event) {
+  const user = await requireUser(openid)
+  assertClubAdmin(user, CLUB_JIELONG)
+  const activity = await mustGet('activities', event.activityId)
+  if (activity.clubId !== CLUB_JIELONG) throw new Error('这场不是界龙散客队')
+  if (!activity.divided || (activity.teams || []).length < 2) throw new Error('先分好至少 2 支队再排场次')
+  const ids = new Set((activity.teams || []).map((team) => team.id))
+  const teamAId = String(event.teamAId || '').trim()
+  const teamBId = String(event.teamBId || '').trim()
+  if (!ids.has(teamAId) || !ids.has(teamBId) || teamAId === teamBId) {
+    throw new Error('请选择两支不同的队')
+  }
+  const roundNo = Number(event.roundNo || 1)
+  if (!Number.isInteger(roundNo) || roundNo < 1 || roundNo > 20) {
+    throw new Error('轮次请选 1 到 20')
+  }
+  const pitchId = event.pitchId === 'pitch_2' ? 'pitch_2' : 'pitch_1'
+  const matchType = event.matchType === 'final' || event.matchType === 'third' ? event.matchType : 'group'
+  const added = await db.collection('rounds').add({
+    data: {
+      activityId: activity._id,
+      roundNo,
+      pitchId,
+      teamAId,
+      teamBId,
+      scoreA: null,
+      scoreB: null,
+      matchType,
+      createdAt: Date.now()
+    }
+  })
+  return { roundId: added._id, roundNo }
+}
+
+async function deleteFixture(openid, event) {
+  const user = await requireUser(openid)
+  assertClubAdmin(user, CLUB_JIELONG)
+  if (!event.roundId) throw new Error('缺少场次')
+  const round = await mustGet('rounds', event.roundId)
+  const activity = await mustGet('activities', round.activityId)
+  if (activity.clubId !== CLUB_JIELONG) throw new Error('这场不是界龙散客队')
+  await db.collection('rounds').doc(round._id).remove()
+  return { removed: true }
+}
+
+async function deleteRoundDirectory(openid, event) {
+  const user = await requireUser(openid)
+  assertClubAdmin(user, CLUB_JIELONG)
+  const activity = await mustGet('activities', event.activityId)
+  if (activity.clubId !== CLUB_JIELONG) throw new Error('这场不是界龙散客队')
+  const roundNo = Number(event.roundNo)
+  if (!Number.isInteger(roundNo) || roundNo < 1 || roundNo > 20) {
+    throw new Error('轮次请选 1 到 20')
+  }
+  const found = await db.collection('rounds').where({
+    activityId: activity._id,
+    roundNo
+  }).limit(40).get()
+  await Promise.all((found.data || []).map((row) => db.collection('rounds').doc(row._id).remove()))
+  // 删中间轮次后，后面的轮次编号前移，标题保持「第一轮、第二轮…」连续
+  const later = await db.collection('rounds').where({
+    activityId: activity._id,
+    roundNo: _.gt(roundNo)
+  }).limit(40).get()
+  await Promise.all((later.data || []).map((row) => db.collection('rounds').doc(row._id).update({
+    data: { roundNo: Number(row.roundNo) - 1 }
+  })))
+  return {
+    removed: (found.data || []).length,
+    roundNo,
+    renumbered: (later.data || []).length
+  }
+}
+
+async function resetFixtures(openid, event) {
+  const user = await requireUser(openid)
+  assertClubAdmin(user, CLUB_JIELONG)
+  const activity = await mustGet('activities', event.activityId)
+  if (activity.clubId !== CLUB_JIELONG) throw new Error('这场不是界龙散客队')
+  const rounds = await db.collection('rounds').where({ activityId: activity._id }).limit(40).get()
+  if (rosterLocked(rounds.data, [])) {
+    throw new Error('已有场次记录了比分，不能重排。如需重排，请先清空已记的比分。')
+  }
+  if (activity.cupStarted && Array.isArray(activity.cupTeamIds) && shouldAutoFixture(activity.cupTeamIds.length)) {
+    const fixtureCount = await writeFixtures(activity._id, activity.cupTeamIds)
+    return { fixtureCount }
+  }
+  await clearRounds(activity._id)
+  return { fixtureCount: 0 }
 }
 
 async function updateFixture(openid, event) {
@@ -707,8 +991,19 @@ async function updateFixture(openid, event) {
     throw new Error('请选择两支不同的队')
   }
   const pitchId = event.pitchId === 'pitch_2' ? 'pitch_2' : 'pitch_1'
+  const updateData = { teamAId: event.teamAId, teamBId: event.teamBId, pitchId }
+  if (event.roundNo != null) {
+    const roundNo = Number(event.roundNo)
+    if (!Number.isInteger(roundNo) || roundNo < 1 || roundNo > 20) {
+      throw new Error('轮次请选 1 到 20')
+    }
+    updateData.roundNo = roundNo
+  }
+  if (event.matchType != null) {
+    updateData.matchType = event.matchType === 'final' || event.matchType === 'third' ? event.matchType : 'group'
+  }
   await db.collection('rounds').doc(round._id).update({
-    data: { teamAId: event.teamAId, teamBId: event.teamBId, pitchId }
+    data: updateData
   })
   return { roundId: round._id }
 }
@@ -720,9 +1015,8 @@ async function addGoalEvent(openid, event) {
   if (activity.clubId === CLUB_WEDNESDAY && event.roundId) throw new Error('周三联的进球记在整场上')
   const goal = normalizeGoalEvent(event)
   let roundId = ''
-  const hasFixtures = shouldAutoFixture(activity.teamCount || (activity.teams || []).length)
-  if (hasFixtures) {
-    if (!event.roundId) throw new Error('请选择场次')
+  // 可绑某场对阵，也可不绑场次直接记个人进球/助攻
+  if (event.roundId) {
     const round = await mustGet('rounds', event.roundId)
     if (round.activityId !== activity._id) throw new Error('场次不属于这场活动')
     roundId = round._id
@@ -762,11 +1056,61 @@ async function clubStats(event) {
   }
   const users = await db.collection('users').limit(200).get()
   const nameOf = {}
-  users.data.forEach((user) => { nameOf[user._openid] = user.name })
-  const rows = require('./clubs').applyGoalEvents(events).map((row) => ({
-    ...row,
-    userName: nameOf[row.playerOpenid] || '球员'
-  }))
+  const avatarOf = {}
+  const groupOf = {}
+  users.data.forEach((user) => {
+    nameOf[user._openid] = user.name
+    avatarOf[user._openid] = user.avatarUrl || ''
+    const targetClub = clubId || CLUB_JIELONG
+    const view = membershipView(user, targetClub)
+    groupOf[user._openid] = targetClub === CLUB_JIELONG
+      ? (view.groupId || 'jl_other')
+      : (view.groupId || user.teamId || '')
+  })
+  const byPlayer = {}
+  require('./clubs').applyGoalEvents(events).forEach((row) => {
+    byPlayer[row.playerOpenid] = {
+      ...row,
+      userName: nameOf[row.playerOpenid] || '球员',
+      avatarUrl: avatarOf[row.playerOpenid] || '',
+      teamId: groupOf[row.playerOpenid] || (clubId === CLUB_JIELONG ? 'jl_other' : '')
+    }
+  })
+  try {
+    const acts = await db.collection('activities').limit(200).get()
+    const actIds = new Set(
+      (acts.data || [])
+        .filter((act) => !clubId || (act.clubId || CLUB_WEDNESDAY) === clubId)
+        .map((act) => act._id)
+    )
+    const contribs = await db.collection('contributions').limit(200).get()
+    ;(contribs.data || []).forEach((item) => {
+      if (!actIds.has(item.activityId)) return
+      const openid = item.playerOpenid
+      if (!openid) return
+      const userGroupId = groupOf[openid] || (clubId === CLUB_JIELONG ? 'jl_other' : (item.teamId || ''))
+      if (!byPlayer[openid]) {
+        byPlayer[openid] = {
+          playerOpenid: openid,
+          userName: item.userName || nameOf[openid] || '球员',
+          avatarUrl: item.avatarUrl || avatarOf[openid] || '',
+          teamId: userGroupId,
+          goals: 0,
+          assists: 0,
+          ownGoals: 0
+        }
+      } else if (userGroupId) {
+        byPlayer[openid].teamId = userGroupId
+      }
+      byPlayer[openid].goals += item.goals || 0
+      byPlayer[openid].assists += item.assists || 0
+      byPlayer[openid].ownGoals += item.ownGoals || 0
+    })
+  } catch (error) {
+    // 忽略异常
+  }
+  const teamFilter = String((event && event.teamId) || '').trim()
+  const rows = Object.values(byPlayer).filter((row) => !teamFilter || row.teamId === teamFilter)
   return { rows, clubId }
 }
 
@@ -785,9 +1129,17 @@ module.exports = {
   assignTeams,
   adminMoveSignup,
   adminSwapSignup,
+  addSessionTeam,
+  removeSessionTeam,
   cancel,
   promote,
+  startJielongCup,
+  clearFixtureScores,
   saveFixtureScore,
+  addFixture,
+  deleteFixture,
+  deleteRoundDirectory,
+  resetFixtures,
   updateFixture,
   setSessionColor,
   addGoalEvent,

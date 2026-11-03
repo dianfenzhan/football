@@ -5,10 +5,16 @@
   "description": "周三快乐足球联队小程序",
   "scripts": {
     "deploy:cloud": "node scripts/deploy-cloud.js",
-    "test": "node --test test/rules.test.js test/mirror.test.js test/clubs.test.js",
+    "test": "node --test test/rules.test.js test/clubs.test.js",
     "smoke": "node scripts/smoke-test.js",
+    "role:ux": "node scripts/role-ux-walk.js",
     "self-check": "node scripts/self-check-multi-club.js",
-    "local:api": "node scripts/ensure-local-api.js"
+    "local:api": "node scripts/ensure-local-api.js",
+    "local:secrets": "node scripts/apply-local-secrets.js",
+    "use:test": "node scripts/use-profile.js test",
+    "use:prod": "node scripts/use-profile.js prod",
+    "db:dump:prod": "node scripts/db-dump.js --profile=prod",
+    "db:import:test": "node scripts/db-import-test.js"
   },
   "devDependencies": {
     "miniprogram-automator": "^0.12.1",

@@ -16,11 +16,7 @@
       <text class="label">时间</text>
       <picker mode="time" value="{{time}}" bindchange="onTime"><view class="picker-value">{{time}}</view></picker>
     </view>
-    <view class="field">
-      <text class="label">报名上限</text>
-      <input class="input" type="number" value="{{maxSignedPlayers}}" bindinput="onMax" />
-    </view>
-    <view class="muted">球员先报名进名单，不用选队。人齐后你再分成 2～6 队，默认每队 8 人。</view>
+    <view class="muted">报名不设人数上限，默认每 8 人自动开一队（最多 6 队）；一键按组分队或手动调人后，新报名进「未分队」池。</view>
     <button class="btn" loading="{{saving}}" bindtap="submit">创建</button>
   </view>
   <view class="card" wx:else>
@@ -36,7 +32,7 @@
             <view class="mode-mark"></view>
             <view class="mode-title">分队报名</view>
           </view>
-          <view class="mode-tag">原有报名方式</view>
+          <view class="mode-tag">两队各自名额</view>
           <view class="mode-desc">两队各报各的，默认各 11 人。本队满了可排后补，或改报对方队。</view>
         </view>
         <view
@@ -48,8 +44,8 @@
             <view class="mode-mark"></view>
             <view class="mode-title">联合报名</view>
           </view>
-          <view class="mode-tag">新的报名方式</view>
-          <view class="mode-desc">共享报名资源池，分三队报名（本队、联队、对方），每组固定 8 人，人数不能改。</view>
+          <view class="mode-tag">三组固定 8 人</view>
+          <view class="mode-desc">共享报名池：本队、联队、对方各 8 人，人数创建后不能改。</view>
         </view>
       </view>
     </view>
@@ -82,5 +78,4 @@
     <view class="muted" wx:if="{{signupMode === 'joint'}}">共享资源池分三队报名，每组固定 8 人，下方不用再选人数。</view>
     <button class="btn" loading="{{saving}}" bindtap="submit">创建</button>
   </view>
-  <mirror />
 </view>

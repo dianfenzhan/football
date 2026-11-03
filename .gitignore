@@ -27,12 +27,16 @@ codeBase/project.private.config.json
 **/private.*.key
 doc/project/private.*.key
 doc/project/secrets.local.json
+doc/project/db-dumps/
 codeBase/cloudfunctions/api/subscribe.local.js
+codeBase/cloudfunctions/api/cloud-env.local.js
 **/.env
 **/.env.*
 !**/.env.example
 !**/secrets.local.example.json
 !**/secrets.local.json.example
+!doc/project/active-profile.example.json
+!doc/project/profiles/*.example.json
 
 # Cloud / DevTools temp dirs (hash-named upload caches)
 codeBase/[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*
@@ -42,6 +46,8 @@ codeBase/scripts/*.local.*
 *.local.json
 !**/secrets.local.example.json
 !**/secrets.local.json.example
+!doc/project/active-profile.example.json
+!doc/project/profiles/*.example.json
 
 # Keep Cursor / Trae project rules & skills (tracked)
 # Ignore only machine-local agent caches if they appear later

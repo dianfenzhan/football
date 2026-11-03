@@ -38,7 +38,7 @@ Page({
       clubId,
       date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}`,
       time: '20:00',
-      title: clubId === 'club_jielong' ? '界龙散客' : '养生球'
+      title: clubId === 'club_jielong' ? '界龙散客局' : '养生球'
     })
     const profileCall = clubId === 'club_jielong' ? callQuiet('orgMe') : call('me')
     profileCall.then((res) => {
@@ -91,8 +91,7 @@ Page({
         clubId: 'club_jielong',
         title: this.data.title,
         location: this.data.location,
-        startTime,
-        maxSignedPlayers: Number(this.data.maxSignedPlayers)
+        startTime
       }).then((res) => {
         wx.redirectTo({ url: `/pages/session/session?id=${res.activityId}` })
       }).catch(() => this.setData({ saving: false }))

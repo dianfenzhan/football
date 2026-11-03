@@ -1,4 +1,4 @@
-const { call, callQuiet, uploadAvatar, avatarChar, avatarColor } = require('../../utils/api')
+const { call, callQuiet, uploadAvatar, avatarChar, avatarColor, assertPlayerName } = require('../../utils/api')
 const { PREFERRED_POSITIONS } = require('../../utils/tactics')
 const { setMultiClubReady, isMultiClubReady } = require('../../utils/club-context')
 
@@ -75,7 +75,7 @@ function fallbackClubs(res) {
       if (item.clubId === 'club_jielong') {
         clubs.push({
           _id: 'club_jielong',
-          name: '界龙散客',
+          name: '界龙散客队',
           joined: true,
           role: item.role || defaultRole,
           groupId: item.groupId || '',
@@ -96,7 +96,7 @@ function fallbackClubs(res) {
     })
     if (clubs.length) return clubs
   }
-  if (!(user.teamId || user.name || user.isAdmin || user.canGrantAdmin)) return []
+  if (!(user.teamId || user.isAdmin || user.canGrantAdmin)) return []
   return [
     {
       _id: 'club_wednesday',
@@ -121,6 +121,13 @@ Page({
     avatarChar: '?',
     avatarBg: '#0f3d2e',
     roleHint: '',
+    myStats: {
+      activities: 0,
+      goals: 0,
+      assists: 0,
+      ownGoals: 0,
+      absences: 0
+    },
     clubs: [],
     editingClubId: '',
     saving: false,
@@ -134,12 +141,20 @@ Page({
     call('me').then((res) => {
       const user = res.user
       const name = user ? user.name : ''
+      const rawStats = (res && res.myStats) || {}
       const profile = {
         name,
         teamId: user ? user.teamId : '',
         preferredPosition: (user && user.preferredPosition) || 'mf',
         avatarChar: avatarChar(name),
         avatarBg: avatarColor(name),
+        myStats: {
+          activities: Number(rawStats.activities) || 0,
+          goals: Number(rawStats.goals) || 0,
+          assists: Number(rawStats.assists) || 0,
+          ownGoals: Number(rawStats.ownGoals) || 0,
+          absences: Number(rawStats.absences) || 0
+        },
         roleHint: user && user.canGrantAdmin
           ? '授权人 · 可在「球员」里设管理员'
           : (user && user.isAdmin ? '管理员 · 可在「球员」里给本队授权' : '')
@@ -291,13 +306,14 @@ Page({
   },
   persistProfile(opts) {
     const options = opts || {}
-    const name = (this.data.name || '').trim()
-    const preferredPosition = options.preferredPosition || this.data.preferredPosition || 'mf'
-    const forceAvatar = !!options.forceAvatar
-    if (!name) {
-      wx.showToast({ title: '请填写昵称', icon: 'none' })
+    const checked = assertPlayerName(this.data.name)
+    if (!checked.ok) {
+      wx.showToast({ title: checked.message, icon: 'none' })
       return
     }
+    const name = checked.name
+    const preferredPosition = options.preferredPosition || this.data.preferredPosition || 'mf'
+    const forceAvatar = !!options.forceAvatar
     const nameChanged = name !== (this._savedName || '')
     const positionChanged = preferredPosition !== (this._savedPosition || '')
     if (!forceAvatar && !nameChanged && !positionChanged && !this.data.tempAvatar) return
@@ -309,11 +325,12 @@ Page({
     this.setData({ saving: true, justSaved: false })
     const finish = (avatarUrl) => {
       const wed = (this.data.clubs || []).find((item) => item._id === 'club_wednesday')
+      const wedTeamId = (wed && wed.groupId) || this.data.teamId || ''
       const payload = {
         name,
-        teamId: (wed && wed.groupId) || this.data.teamId || 'team_jiong',
         preferredPosition
       }
+      if (wedTeamId) payload.teamId = wedTeamId
       if (typeof avatarUrl === 'string') payload.avatarUrl = avatarUrl
       call('saveProfile', payload).then((res) => {
         this._savedName = res.user.name || name

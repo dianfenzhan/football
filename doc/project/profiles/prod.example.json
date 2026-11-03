@@ -1,0 +1,9 @@
+{
+  "name": "正式：周三快乐足球联队",
+  "appId": "wxb8021a7ae0c71bd0",
+  "appSecret": "正式 AppSecret，不要提交",
+  "privateKeyPath": "private.wxb8021a7ae0c71bd0.key",
+  "envId": "cloudbase-d5g20kltv44b494f6",
+  "subscribeRemindTemplate": "正式开赛提醒模板 ID",
+  "subscribePromoteTemplate": "正式后补升正选模板 ID"
+}

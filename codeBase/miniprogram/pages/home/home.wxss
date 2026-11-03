@@ -1,6 +1,6 @@
 .screen {
   min-height: 100vh;
-  padding: 32rpx 24rpx 160rpx;
+  padding: 48rpx 24rpx 160rpx;
   box-sizing: border-box;
   background: #e8efe9;
 }
@@ -16,7 +16,7 @@
   display: flex;
   align-items: center;
   gap: 20rpx;
-  margin-bottom: 20rpx;
+  margin-bottom: 28rpx;
 }
 
 .brand-ball {

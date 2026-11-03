@@ -35,7 +35,7 @@ Page({
   },
   joinJielong() {
     call('joinClub', { clubId: 'club_jielong' }).then(() => {
-      wx.showToast({ title: '已加入界龙散客' })
+      wx.showToast({ title: '已加入界龙散客队' })
       this.load()
     })
   },

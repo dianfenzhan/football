@@ -1,4 +1,7 @@
 const FORCE_REMOTE_KEY = 'cloudApiForceRemote'
+const cloudEnv = (() => {
+  try { return require('../cloud-env.js') } catch (err) { return {} }
+})()
 
 function envVersion() {
   try {
@@ -13,6 +16,7 @@ function isDevelop() {
 }
 
 function isForceRemote() {
+  if (cloudEnv && cloudEnv.forceRemoteCloud) return true
   try {
     return !!wx.getStorageSync(FORCE_REMOTE_KEY)
   } catch (err) {
@@ -20,7 +24,7 @@ function isForceRemote() {
   }
 }
 
-/** 测线上云函数时设为 true；日常开发保持 false（默认走本地调试）。 */
+/** 手动强制走云端；测试 profile 由 cloud-env.forceRemoteCloud 自动打开。 */
 function setForceRemoteCloud(on) {
   try {
     if (on) wx.setStorageSync(FORCE_REMOTE_KEY, true)
@@ -128,6 +132,18 @@ function sortQuotasByMine(quotas, myTeamId) {
 }
 
 const AVATAR_COLORS = ['#0f3d2e', '#1d6b50', '#8c3a2f', '#b8763c', '#3d5a80', '#6b4d8c', '#a0522d', '#4a7c59']
+const MAX_PLAYER_NAME_LENGTH = 16
+
+function assertPlayerName(raw, emptyMessage) {
+  const name = String(raw || '').trim()
+  if (!name) {
+    return { ok: false, message: emptyMessage || '请填写昵称', name: '' }
+  }
+  if ([...name].length > MAX_PLAYER_NAME_LENGTH) {
+    return { ok: false, message: '昵称最多 16 个字', name }
+  }
+  return { ok: true, name }
+}
 
 function avatarChar(name) {
   return (name || '?').trim().charAt(0) || '?'
@@ -154,6 +170,8 @@ module.exports = {
   uploadAvatar,
   avatarChar,
   avatarColor,
+  MAX_PLAYER_NAME_LENGTH,
+  assertPlayerName,
   setForceRemoteCloud,
   isForceRemote,
   preferLocalCloud,

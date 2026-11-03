@@ -7,9 +7,11 @@ const {
   sortQuotasByMine,
   uploadAvatar,
   avatarChar,
-  avatarColor
+  avatarColor,
+  assertPlayerName
 } = require('../../utils/api')
 const {
+  PREFERRED_POSITIONS,
   buildDefaultTacticsState,
   reconcileSavedBoard,
   applyPitchDrag,
@@ -52,12 +54,13 @@ function openWaitHours(startTime, now) {
   return list
 }
 
-function pigeonRuleText(startTime) {
+function pigeonRuleText(startTime, cutoffHours) {
+  const hours = cutoffHours == null ? 4 : Number(cutoffHours)
   const start = Number(startTime)
   if (!Number.isFinite(start) || start <= 0) {
-    return '开赛前 4 小时之前取消报名，无责；之后取消，记一次鸽子。'
+    return `开赛前 ${hours} 小时之前取消报名，无责；之后取消，记一次鸽子。`
   }
-  const date = new Date(start - 4 * 60 * 60 * 1000)
+  const date = new Date(start - hours * 60 * 60 * 1000)
   const pad = (n) => (n < 10 ? `0${n}` : `${n}`)
   const when = `${date.getMonth() + 1}月${date.getDate()}日 ${pad(date.getHours())}:${pad(date.getMinutes())}`
   return `${when} 之前取消报名，无责；之后取消，记一次鸽子。`
@@ -87,6 +90,7 @@ Page({
     pickedLabel: '选择队员',
     goalIndex: 0,
     assistIndex: 0,
+    ownGoalIndex: 0,
     pigeonIndex: 0,
     savingStat: false,
     scoreLeft: 0,
@@ -101,20 +105,27 @@ Page({
     waitHourOptions: [],
     waitHourSelected: null,
     waitHourInto: '',
+    myWaitHours: null,
     pledgeKind: 'play',
     pledgeChoice: 'home',
-    pledgeStep: 'remind',
     pledgeButtonText: '同意并报名',
     pledgeTitle: '报名须知',
     pledgeHint: '',
     pledgeLines: [],
     pledgeAuthStep: 'remind',
     pigeonRuleText: '',
+    pigeonCutoffHours: 4,
+    remindBeforeHours: 2,
     pigeons: [],
     myPigeon: false,
     cancelWillPigeon: false,
+    positions: PREFERRED_POSITIONS,
+    wednesdayJoined: false,
+    regTeams: [],
     regAvatarUrl: '',
+    regTempAvatar: '',
     regName: '',
+    regPosition: '',
     regTeamId: '',
     regSaving: false,
     loadFailed: false,
@@ -201,8 +212,18 @@ Page({
         return
       }
       const me = res.me
-      const myTeamId = (me && me.teamId) || 'team_jiong'
-      const teams = sortTeamsByMine(res.teams || [], myTeamId)
+      const rawTeams = res.teams || []
+      const regTeams = rawTeams.filter((team) => team._id !== 'team_unite')
+      const wedGroupId = (me && me.teamId)
+        || (((me && me.memberships) || []).find((m) => m && m.clubId === 'club_wednesday') || {}).groupId
+        || ''
+      const wednesdayJoined = !!(
+        me
+        && String(me.name || '').trim()
+        && regTeams.some((team) => team._id === wedGroupId)
+      )
+      const myTeamId = wedGroupId || 'team_jiong'
+      const teams = sortTeamsByMine(rawTeams, myTeamId)
       const contributionMap = {}
       ;(res.contributions || []).forEach((item) => {
         contributionMap[item.playerOpenid] = item
@@ -221,6 +242,7 @@ Page({
           shortName: this.shortDisplayName(userName, joint ? 4 : 8),
           goals: stat.goals || 0,
           assists: stat.assists || 0,
+          ownGoals: stat.ownGoals || 0,
           absent: !!stat.absent,
           avatarChar: avatarChar(userName),
           avatarBg: avatarColor(userName)
@@ -263,16 +285,20 @@ Page({
       const records = (res.contributions || []).map((item) => {
         const goals = item.goals || 0
         const assists = item.assists || 0
+        const ownGoals = item.ownGoals || 0
         return {
           ...item,
           goals,
           assists,
+          ownGoals,
           absent: !!item.absent,
           goalIndex: Math.max(0, Math.min(20, goals)),
           assistIndex: Math.max(0, Math.min(20, assists)),
+          ownGoalIndex: Math.max(0, Math.min(20, ownGoals)),
           pigeonIndex: item.absent ? 1 : 0,
           absentBy: item.absentBy || 'admin',
           editable: !!players.find((player) => player._openid === item.playerOpenid) && item.absentBy !== 'system',
+          deletable: true,
           teamName: teamName(teams, item.teamId),
           avatarChar: avatarChar(item.userName),
           avatarBg: avatarColor(item.userName)
@@ -323,6 +349,8 @@ Page({
       this.setData({
         activity: { ...res.activity, timeText: formatTime(res.activity.startTime) },
         teams,
+        regTeams,
+        wednesdayJoined,
         quotas,
         signups: res.signups || [],
         activityBoards,
@@ -361,12 +389,15 @@ Page({
         })),
         myPigeon: !!(me && !signed && !waiting && (res.pigeons || []).some((item) => item.playerOpenid === me._openid)),
         cancelWillPigeon: !!res.cancelWillPigeon,
-        pigeonRuleText: pigeonRuleText(res.activity.startTime),
+        pigeonCutoffHours: res.pigeonCutoffHours == null ? 4 : res.pigeonCutoffHours,
+        remindBeforeHours: res.remindBeforeHours == null ? 2 : res.remindBeforeHours,
+        pigeonRuleText: pigeonRuleText(res.activity.startTime, res.pigeonCutoffHours),
         showSharePrompt: false,
         pickIndex: keepForm ? this.data.pickIndex : (picked ? pickMembers.indexOf(picked) : 0),
         pickedLabel: keepForm ? this.data.pickedLabel : (picked ? picked.label : '选择队员'),
         goalIndex: keepForm ? this.data.goalIndex : (picked ? (stat.goals || 0) : 0),
         assistIndex: keepForm ? this.data.assistIndex : (picked ? (stat.assists || 0) : 0),
+        ownGoalIndex: keepForm ? this.data.ownGoalIndex : (picked ? (stat.ownGoals || 0) : 0),
         pigeonIndex: keepForm ? this.data.pigeonIndex : (picked && stat.absent ? 1 : 0),
         myTeamName: me ? teamName(teams, me.teamId) : '',
         signedTeamName: mySignup
@@ -378,6 +409,9 @@ Page({
         waitBanner: waiting ? this.waitBanner(mySignup, (res.signups || []).filter((item) => item.status === 'waitlist'), me) : '',
         placeNote: this.placeNote(res.activity.signupMode, mySignup, me, teams, quotas),
         waitChoices: res.waitChoices || [],
+        myWaitHours: waiting && mySignup && Number.isFinite(Number(mySignup.waitHours))
+          ? Number(mySignup.waitHours)
+          : null,
         loadFailed: false
       }, () => {
         if (this.pendingScrollToTactics) {
@@ -417,6 +451,10 @@ Page({
     return `你在 ${where}。${how}`
   },
   signup() {
+    if (!this.data.wednesdayJoined) {
+      this.openRegister()
+      return
+    }
     const joint = this.data.joint
     const myId = this.data.me && this.data.me.teamId
     const otherId = this.data.otherTeamId
@@ -459,18 +497,27 @@ Page({
   pledgeThenSignup(choice, kind) {
     const waiting = kind === 'wait'
     const ownTeam = choice === 'waitlist'
+    this._subFlags = {}
     this.setData({
       showPledge: true,
       pledgeChoice: choice,
       pledgeKind: kind,
-      pledgeStep: waiting ? 'both' : 'remind',
+      pledgeAuthStep: waiting ? 'both' : 'remind',
       pledgeTitle: waiting ? (ownTeam ? '后补本队' : '后补') : '报名须知',
-      pledgeHint: waiting ? '' : '开赛前 2 小时会提醒你这场球。',
+      pledgeHint: waiting
+        ? ''
+        : `开赛前 ${this.data.remindBeforeHours == null ? 2 : this.data.remindBeforeHours} 小时会提醒你这场球。`,
       pledgeLines: waiting
-        ? ['有人退出，自动补上并发消息', '开赛前 4 小时前取消，不记鸽子']
+        ? [
+          `开赛前 ${this.data.pigeonCutoffHours == null ? 4 : this.data.pigeonCutoffHours} 小时前取消，无责`,
+          '下一步申请：补位通知、开赛提醒'
+        ]
         : [],
       pledgeButtonText: waiting ? '同意并后补' : '同意并报名',
-      pigeonRuleText: pigeonRuleText(this.data.activity && this.data.activity.startTime)
+      pigeonRuleText: pigeonRuleText(
+        this.data.activity && this.data.activity.startTime,
+        this.data.pigeonCutoffHours
+      )
     })
   },
   dismissPledge() {
@@ -485,20 +532,28 @@ Page({
     this._subFlags = flags
     const remindId = String(templates.remind || '').trim()
     const promoteId = String(templates.promote || '').trim()
-    // 后补一次申请两个模板；正选只申请开赛提醒。须在用户点击回调里同步调用。
+    // 后补一次传入两个模板 ID，微信弹一个授权窗可同时勾选；正选只申请开赛提醒。
     const tmplIds = waiting
       ? [promoteId, remindId].filter(Boolean)
       : (remindId ? [remindId] : [])
+    let finished = false
     const finish = () => {
+      if (finished) return
+      finished = true
+      if (this._pledgeSubTimer) {
+        clearTimeout(this._pledgeSubTimer)
+        this._pledgeSubTimer = null
+      }
       this.setData({ showPledge: false })
       if (kind === 'wait') this.pickWaitHours((hours) => this.doSignup(choice, hours))
       else this.doSignup(choice)
     }
+    // 订阅失败/取消/模拟器卡住都不能挡住报名
     if (!tmplIds.length || !wx.requestSubscribeMessage) {
-      if (!tmplIds.length) wx.showToast({ title: '通知还没配好', icon: 'none' })
       finish()
       return
     }
+    this._pledgeSubTimer = setTimeout(finish, 8000)
     wx.requestSubscribeMessage({
       tmplIds,
       success: (result) => {
@@ -508,18 +563,12 @@ Page({
       fail: (error) => {
         const msg = String((error && error.errMsg) || '')
         if (msg.indexOf('cancel') !== -1 || msg.indexOf('取消') !== -1) return
-        wx.showToast({
-          title: msg.indexOf('template') !== -1 || msg.indexOf('模板') !== -1
-            ? '订阅模板无效，请检查后台配置'
-            : '没有弹出授权，请再点一次',
-          icon: 'none'
-        })
+        // 模板异常只提示，仍继续报名
+        if (msg.indexOf('template') !== -1 || msg.indexOf('模板') !== -1) {
+          wx.showToast({ title: '提醒订阅暂不可用，已继续报名', icon: 'none' })
+        }
       },
-      complete: (result) => {
-        const err = (result && result.errMsg) || ''
-        if (err.indexOf('fail') !== -1 && err.indexOf('cancel') === -1 && err.indexOf('取消') === -1) return
-        finish()
-      }
+      complete: finish
     })
   },
   doSignup(choice, waitHours) {
@@ -531,10 +580,14 @@ Page({
   pickWaitHours(done) {
     const hours = openWaitHours(this.data.activity && this.data.activity.startTime, Date.now())
     if (!hours.length) {
-      wx.showToast({ title: '后补时间已经过了', icon: 'none' })
+      wx.showToast({ title: '后补截止时间已经过了', icon: 'none' })
       return
     }
-    const selected = hours.indexOf(4) === -1 ? null : 4
+    // 修改时优先回显已保存的 waitHours；首次后补仍默认开赛前 4 小时
+    const saved = this.data.myWaitHours
+    let selected = null
+    if (saved != null && hours.indexOf(saved) !== -1) selected = saved
+    else if (hours.indexOf(4) !== -1) selected = 4
     this._waitHourDone = done
     this.setData({
       showWaitHours: true,
@@ -552,7 +605,7 @@ Page({
   },
   confirmWaitHour() {
     if (this.data.waitHourSelected == null) {
-      wx.showToast({ title: '请选择后补时间', icon: 'none' })
+      wx.showToast({ title: '请选择补位截止时间', icon: 'none' })
       return
     }
     const hours = this.data.waitHourSelected
@@ -944,32 +997,50 @@ Page({
     })
   },
   openRegister() {
+    const me = this.data.me
+    const regTeams = this.data.regTeams && this.data.regTeams.length
+      ? this.data.regTeams
+      : (this.data.teams || []).filter((team) => team._id !== 'team_unite')
+    const wedGroupId = (me && me.teamId)
+      || (((me && me.memberships) || []).find((m) => m && m.clubId === 'club_wednesday') || {}).groupId
+      || ''
+    const matchedTeamId = regTeams.some((team) => team._id === wedGroupId) ? wedGroupId : ''
     this.setData({
       showRegister: true,
-      regAvatarUrl: '',
-      regName: '',
-      regTeamId: this.data.regTeamId || (this.data.teams[0] && this.data.teams[0]._id) || ''
+      regAvatarUrl: (me && me.avatarUrl) || '',
+      regTempAvatar: '',
+      regName: (me && me.name) || '',
+      regPosition: (me && me.preferredPosition) || '',
+      regTeamId: matchedTeamId || this.data.regTeamId || (regTeams[0] && regTeams[0]._id) || 'team_jiong'
     })
   },
   closeRegister() {
     this.setData({ showRegister: false })
   },
   onChooseAvatar(event) {
-    this.setData({ regAvatarUrl: event.detail.avatarUrl })
+    const url = event.detail && event.detail.avatarUrl
+    if (!url) return
+    this.setData({ regAvatarUrl: url, regTempAvatar: url })
   },
   onRegName(event) {
     this.setData({ regName: event.detail.value })
+  },
+  onRegPosition(event) {
+    const id = event.currentTarget.dataset.id
+    if (!id) return
+    this.setData({ regPosition: this.data.regPosition === id ? '' : id })
   },
   onRegTeam(event) {
     this.setData({ regTeamId: event.currentTarget.dataset.team })
   },
   submitRegister() {
     if (this.data.regSaving) return
-    const name = this.data.regName.trim()
-    if (!name) {
-      wx.showToast({ title: '请填写昵称', icon: 'none' })
+    const checked = assertPlayerName(this.data.regName)
+    if (!checked.ok) {
+      wx.showToast({ title: checked.message, icon: 'none' })
       return
     }
+    const name = checked.name
     if (!this.data.regTeamId) {
       wx.showToast({ title: '请选择球队', icon: 'none' })
       return
@@ -980,24 +1051,30 @@ Page({
     const remindId = String(templates.remind || '').trim()
     const continueRegister = () => {
       this.setData({ regSaving: true })
-      const tempAvatar = this.data.regAvatarUrl
+      const tempAvatar = this.data.regTempAvatar
       const openid = this.data.me && this.data.me._openid
-      const saveAndSignup = (avatarUrl) => call('saveProfile', {
-        name,
-        teamId: this.data.regTeamId,
-        avatarUrl
-      }).then(() => call('signup', {
-        activityId: this.data.id,
-        remindAccepted: !!flags.remindAccepted,
-        promoteAccepted: !!flags.promoteAccepted
-      }))
-        .then(() => {
-          this.setData({ showRegister: false, regSaving: false })
-          wx.showToast({ title: '报名成功' })
-          this.load()
-        })
+      const saveAndSignup = (avatarUrl) => {
+        const profilePayload = {
+          name,
+          clubId: 'club_wednesday',
+          groupId: this.data.regTeamId,
+          teamId: this.data.regTeamId,
+          preferredPosition: this.data.regPosition || ''
+        }
+        if (typeof avatarUrl === 'string') profilePayload.avatarUrl = avatarUrl
+        return call('saveProfile', profilePayload).then(() => call('signup', {
+          activityId: this.data.id,
+          remindAccepted: !!flags.remindAccepted,
+          promoteAccepted: !!flags.promoteAccepted
+        }))
+          .then(() => {
+            this.setData({ showRegister: false, regSaving: false, regTempAvatar: '' })
+            wx.showToast({ title: '报名成功' })
+            this.load()
+          })
+      }
       const fail = () => {
-        this.setData({ regSaving: false, showRegister: false })
+        this.setData({ regSaving: false, showRegister: false, regTempAvatar: '' })
         this.load()
       }
       if (tempAvatar) {
@@ -1005,7 +1082,7 @@ Page({
           .then((fileID) => saveAndSignup(fileID).catch(fail))
           .catch(fail)
       } else {
-        saveAndSignup('').catch(fail)
+        saveAndSignup(this.data.me ? undefined : '').catch(fail)
       }
     }
     if (!remindId || !wx.requestSubscribeMessage) {
@@ -1156,6 +1233,7 @@ Page({
       pickedLabel: member.label,
       goalIndex: stat.goals || 0,
       assistIndex: stat.assists || 0,
+      ownGoalIndex: stat.ownGoals || 0,
       pigeonIndex: stat.absent ? 1 : 0
     })
   },
@@ -1183,7 +1261,7 @@ Page({
   rejectAbsentStats() {
     wx.showModal({
       title: '出勤情况',
-      content: '鸽子的情况下，进球和助攻得是 0',
+      content: '鸽子的情况下，进球、助攻和乌龙球得是 0',
       showCancel: false
     })
   },
@@ -1193,7 +1271,7 @@ Page({
   },
   onEditGoals(event) {
     const goalIndex = Number(event.detail.value)
-    if (this.data.pigeonIndex === 1 && (goalIndex !== 0 || this.data.assistIndex !== 0)) {
+    if (this.data.pigeonIndex === 1 && (goalIndex !== 0 || this.data.assistIndex !== 0 || this.data.ownGoalIndex !== 0)) {
       this.rejectAbsentStats()
       this.keepPicker('goalIndex', this.data.goalIndex)
       return
@@ -1202,16 +1280,25 @@ Page({
   },
   onEditAssists(event) {
     const assistIndex = Number(event.detail.value)
-    if (this.data.pigeonIndex === 1 && (this.data.goalIndex !== 0 || assistIndex !== 0)) {
+    if (this.data.pigeonIndex === 1 && (this.data.goalIndex !== 0 || assistIndex !== 0 || this.data.ownGoalIndex !== 0)) {
       this.rejectAbsentStats()
       this.keepPicker('assistIndex', this.data.assistIndex)
       return
     }
     this.setData({ assistIndex })
   },
+  onEditOwnGoals(event) {
+    const ownGoalIndex = Number(event.detail.value)
+    if (this.data.pigeonIndex === 1 && (this.data.goalIndex !== 0 || this.data.assistIndex !== 0 || ownGoalIndex !== 0)) {
+      this.rejectAbsentStats()
+      this.keepPicker('ownGoalIndex', this.data.ownGoalIndex)
+      return
+    }
+    this.setData({ ownGoalIndex })
+  },
   onEditAbsent(event) {
     const pigeonIndex = Number(event.detail.value)
-    if (pigeonIndex === 1 && (this.data.goalIndex !== 0 || this.data.assistIndex !== 0)) {
+    if (pigeonIndex === 1 && (this.data.goalIndex !== 0 || this.data.assistIndex !== 0 || this.data.ownGoalIndex !== 0)) {
       this.rejectAbsentStats()
       this.setData({ pigeonIndex: 0 })
       return
@@ -1225,11 +1312,11 @@ Page({
       wx.showToast({ title: '请选择队员', icon: 'none' })
       return
     }
-    if (this.data.pigeonIndex === 1 && (this.data.goalIndex !== 0 || this.data.assistIndex !== 0)) {
+    if (this.data.pigeonIndex === 1 && (this.data.goalIndex !== 0 || this.data.assistIndex !== 0 || this.data.ownGoalIndex !== 0)) {
       this.rejectAbsentStats()
       return
     }
-    this.writeStat(player._openid, this.data.goalIndex, this.data.assistIndex, this.data.pigeonIndex === 1, true)
+    this.writeStat(player._openid, this.data.goalIndex, this.data.assistIndex, this.data.ownGoalIndex, this.data.pigeonIndex === 1, true)
   },
   onRowGoals(event) {
     const record = this.rowByOpenid(event.currentTarget.dataset.openid)
@@ -1240,7 +1327,7 @@ Page({
       this.load()
       return
     }
-    this.writeStat(record.playerOpenid, goals, record.assists, record.absent, false)
+    this.writeStat(record.playerOpenid, goals, record.assists, record.ownGoals || 0, record.absent, false)
   },
   onRowAssists(event) {
     const record = this.rowByOpenid(event.currentTarget.dataset.openid)
@@ -1251,32 +1338,44 @@ Page({
       this.load()
       return
     }
-    this.writeStat(record.playerOpenid, record.goals, assists, record.absent, false)
+    this.writeStat(record.playerOpenid, record.goals, assists, record.ownGoals || 0, record.absent, false)
+  },
+  onRowOwnGoals(event) {
+    const record = this.rowByOpenid(event.currentTarget.dataset.openid)
+    if (!record) return
+    const ownGoals = Number(event.detail.value)
+    if (record.absent && ownGoals !== 0) {
+      this.rejectAbsentStats()
+      this.load()
+      return
+    }
+    this.writeStat(record.playerOpenid, record.goals, record.assists, ownGoals, record.absent, false)
   },
   onRowAbsent(event) {
     const record = this.rowByOpenid(event.currentTarget.dataset.openid)
     if (record && record.absentBy === 'system') return
     if (!record) return
     const absent = Number(event.detail.value) === 1
-    if (absent && (record.goals !== 0 || record.assists !== 0)) {
+    if (absent && (record.goals !== 0 || record.assists !== 0 || (record.ownGoals || 0) !== 0)) {
       this.rejectAbsentStats()
       this.load()
       return
     }
-    this.writeStat(record.playerOpenid, record.goals, record.assists, absent, false)
+    this.writeStat(record.playerOpenid, record.goals, record.assists, record.ownGoals || 0, absent, false)
   },
   rowByOpenid(openid) {
     if (!this.data.me || !this.data.me.isAdmin) return null
     return this.data.records.find((item) => item.playerOpenid === openid) || null
   },
-  writeStat(playerOpenid, goals, assists, absent, toast) {
+  writeStat(playerOpenid, goals, assists, ownGoals, absent, toast) {
     if (this.data.savingStat) return
     this.setData({ savingStat: true })
     call('setContribution', {
       activityId: this.data.id,
       playerOpenid,
       goals,
-      assists
+      assists,
+      ownGoals
     }).then(() => call('setAbsent', {
       activityId: this.data.id,
       playerOpenid,

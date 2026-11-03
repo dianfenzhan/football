@@ -17,7 +17,6 @@
     "backgroundColor": "#f4f6f5"
   },
   "usingComponents": {
-    "mirror": "/components/mirror/mirror",
     "club-nav": "/components/club-nav/club-nav"
   },
   "style": "v2",

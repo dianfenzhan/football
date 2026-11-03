@@ -1,5 +1,5 @@
 <view class="page">
-  <club-nav bind:change="onFilterChange" />
+  <club-nav title="数据" bind:change="onFilterChange" />
   <block wx:if="{{noClub}}">
     <view class="empty club-empty">还没有加入球队，暂无数据</view>
   </block>
@@ -38,6 +38,7 @@
         <text class="board-title">{{board.name}}榜</text>
         <text class="board-note">前 10</text>
       </view>
+      <view wx:if="{{boardId === 'absences' && canSeeAbsences}}" class="admin-privacy-tip">仅管理员可见，此信息不会暴露给队员</view>
       <view wx:if="{{list.length === 0}}" class="empty">{{board.empty}}</view>
       <view wx:for="{{list}}" wx:key="playerOpenid" class="rank">
         <view class="badge {{board.miss ? 'badge-miss' : ''}} badge-{{item.rank}}">{{item.rank}}</view>
@@ -53,5 +54,4 @@
   </block>
 
   <nav current="stats" />
-  <mirror />
 </view>
