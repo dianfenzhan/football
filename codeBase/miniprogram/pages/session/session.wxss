@@ -177,6 +177,20 @@
   color: #8a9691;
   line-height: 1.4;
 }
+.assign-hint {
+  display: block;
+  margin: 0 0 12rpx;
+  font-size: 22rpx;
+  color: #8a9691;
+  line-height: 1.4;
+}
+.pending-pool-hint {
+  display: block;
+  margin: 0 0 12rpx;
+  font-size: 22rpx;
+  color: #66706c;
+  line-height: 1.4;
+}
 .podium-row {
   display: flex;
   align-items: center;

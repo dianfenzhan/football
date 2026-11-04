@@ -14,6 +14,7 @@ const {
   CLUB_SEEDS,
   clubSeed,
   buildSessionTeams,
+  autoSessionPlacement,
   pigeonCutoffHours,
   membershipView,
   withClubMembership,
@@ -21,6 +22,7 @@ const {
   recolorGroup,
   reorderGroups,
   divideByRosterGroups,
+  ASSIGN_MIN_PLAYERS,
   placeInPool,
   assertAdminMove,
   rosterLocked,
@@ -312,7 +314,6 @@ async function createActivity(openid, event) {
   if (!title) throw new Error('请填写标题')
   if (!location) throw new Error('请填写地点')
   if (!startTime) throw new Error('请选择时间')
-  const seedTeams = buildSessionTeams(2)
   const added = await db.collection('activities').add({
     data: {
       title,
@@ -325,11 +326,11 @@ async function createActivity(openid, event) {
       venueId: VENUE_JIELONG._id,
       sessionType: 'kick',
       pitchIds: ['pitch_1', 'pitch_2'],
-      teams: seedTeams,
-      teamCount: seedTeams.length,
+      teams: [],
+      teamCount: 0,
       targetPerTeam: club.config.defaultTeamSize || 8,
-      divided: true,
-      manualRoster: true,
+      divided: false,
+      manualRoster: false,
       cupStarted: false,
       cupTeamIds: [],
       createdBy: openid,
@@ -394,14 +395,26 @@ async function signup(openid, event) {
     view = membershipView({ ...user, memberships }, CLUB_JIELONG)
   }
   const placed = placeInPool()
+  const manualRoster = !!(activity.manualRoster || activity.cupStarted)
   const teamSize = activity.targetPerTeam || club.config.defaultTeamSize || 8
-  const assignedTeamId = PENDING_TEAM
+  let placement = null
+  let assignedTeamId = PENDING_TEAM
   await db.runTransaction(async (transaction) => {
     const existing = await transaction.collection('signups').where({
       activityId: activity._id, _openid: openid
     }).limit(1).get()
     const current = existing.data[0]
     if (current && (current.status === 'signed' || current.status === 'waitlist')) throw new Error('你已经报名了')
+    if (!manualRoster) {
+      const allSigned = await transaction.collection('signups').where({
+        activityId: activity._id, status: 'signed'
+      }).limit(100).get()
+      const livePlacement = autoSessionPlacement(allSigned.data.length, activity.teams || [], teamSize)
+      placement = livePlacement
+      assignedTeamId = livePlacement.teamId
+    } else {
+      assignedTeamId = PENDING_TEAM
+    }
     const sessionOrder = await nextSessionOrder(transaction, activity._id, assignedTeamId)
     const data = {
       activityId: activity._id,
@@ -430,18 +443,13 @@ async function signup(openid, event) {
       data: { absent: false, absentBy: '', pigeonAt: 0, updatedAt: Date.now() }
     })
   }
-  // 旧场次可能尚未建队壳：补齐 A/B 空队，报名一律进未分队池
-  const seedTeams = (activity.teams && activity.teams.length)
-    ? activity.teams
-    : buildSessionTeams(2)
-  if (!activity.divided || !activity.manualRoster || !(activity.teams && activity.teams.length)) {
+  if (!manualRoster && placement) {
     await db.collection('activities').doc(activity._id).update({
       data: {
-        teams: seedTeams,
-        teamCount: seedTeams.length,
+        teams: placement.teams,
+        teamCount: placement.teamCount,
         targetPerTeam: teamSize,
         divided: true,
-        manualRoster: true,
         updatedAt: Date.now()
       }
     })
@@ -509,6 +517,9 @@ async function assignTeams(openid, event) {
   }).limit(100).get()
   const ordered = signed.data.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
   if (!ordered.length) throw new Error('还没有人报名，先等几个人再分')
+  if (ordered.length < ASSIGN_MIN_PLAYERS) {
+    throw new Error(`满 ${ASSIGN_MIN_PLAYERS} 人后再一键分队（当前 ${ordered.length} 人）；人少可先手动拖进各队`)
+  }
   const users = await db.collection('users').limit(200).get()
   const groupOf = {}
   ;(users.data || []).forEach((row) => {
@@ -520,19 +531,37 @@ async function assignTeams(openid, event) {
     (playerOpenid) => groupOf[playerOpenid] || '',
     club.groups || []
   )
+  const now = Date.now()
+  const signupUpdates = []
   for (const team of plan.teams) {
     const players = plan.assignments[team.id] || []
     for (let index = 0; index < players.length; index += 1) {
-      await db.collection('signups').doc(players[index]._id).update({
-        data: { teamId: team.id, sessionOrder: index, updatedAt: Date.now() }
+      signupUpdates.push({
+        _id: players[index]._id,
+        teamId: team.id,
+        sessionOrder: index
       })
     }
   }
   const leftover = plan.leftover || []
   for (let index = 0; index < leftover.length; index += 1) {
-    await db.collection('signups').doc(leftover[index]._id).update({
-      data: { teamId: PENDING_TEAM, sessionOrder: index, updatedAt: Date.now() }
+    signupUpdates.push({
+      _id: leftover[index]._id,
+      teamId: PENDING_TEAM,
+      sessionOrder: index
     })
+  }
+  // 并发批量写，避免 20+ 人时逐条 await 触发客户端/网关超时
+  const BATCH = 20
+  for (let i = 0; i < signupUpdates.length; i += BATCH) {
+    const chunk = signupUpdates.slice(i, i + BATCH)
+    await Promise.all(chunk.map((row) => db.collection('signups').doc(row._id).update({
+      data: {
+        teamId: row.teamId,
+        sessionOrder: row.sessionOrder,
+        updatedAt: now
+      }
+    })))
   }
   const fixtureCount = 0
   const targetPerTeam = activity.targetPerTeam || club.config.defaultTeamSize || 8
@@ -543,7 +572,7 @@ async function assignTeams(openid, event) {
       targetPerTeam,
       divided: true,
       manualRoster: true,
-      updatedAt: Date.now()
+      updatedAt: now
     }
   })
   return {
@@ -734,7 +763,9 @@ async function setSessionColor(openid, event) {
       : team
   ))
   if (!teams.some((team) => team.id === event.teamId)) throw new Error('找不到这个队')
-  await db.collection('activities').doc(activity._id).update({ data: { teams } })
+  await db.collection('activities').doc(activity._id).update({
+    data: { teams, manualRoster: true, updatedAt: Date.now() }
+  })
   return { teams }
 }
 

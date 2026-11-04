@@ -14,6 +14,8 @@ const {
 } = require('../../utils/club-context')
 
 const PENDING = 'team_pending'
+/** 一键分队最低正选人数（与界龙杯 24 人门槛独立；与云函数 ASSIGN_MIN_PLAYERS 对齐） */
+const ASSIGN_MIN_PLAYERS = 16
 /** 开赛前多久自动开放轮次/积分/个人数据（队员可见；管理员可提前筹备对阵） */
 const SESSION_OPEN_LEAD_MS = 2 * 60 * 60 * 1000
 const JIELONG_DEFAULT_GROUP = 'jl_other'
@@ -290,15 +292,30 @@ Page({
     renameJerseyColor: '',
     colorPresets: [
       { id: 'red', label: '红', color: '#c44536' },
-      { id: 'white', label: '白', color: '#f4f4f4' },
+      { id: 'orange', label: '橙', color: '#e67e22' },
       { id: 'yellow', label: '黄', color: '#e6b325' },
       { id: 'green', label: '绿', color: '#1d6b50' },
+      { id: 'cyan', label: '青', color: '#1abc9c' },
       { id: 'blue', label: '蓝', color: '#3d5a80' },
+      { id: 'purple', label: '紫', color: '#7b5ea7' },
+      { id: 'pink', label: '粉', color: '#e091b0' },
+      { id: 'pinkwhite', label: '粉白', color: '#f4c2c2' },
+      { id: 'white', label: '白', color: '#f4f4f4' },
+      { id: 'gray', label: '灰', color: '#66706c' },
       { id: 'black', label: '黑', color: '#1c2421' },
-      { id: 'gray', label: '灰', color: '#66706c' }
+      {
+        id: 'rainbow',
+        label: '彩虹',
+        color: 'linear-gradient(135deg,#e40303 0%,#ff8c00 20%,#ffed00 40%,#008026 60%,#24408e 80%,#732982 100%)'
+      }
     ],
     cupActionEnabled: false,
     cupActionHint: '',
+    assignEnabled: false,
+    assignPrimary: false,
+    assignHint: '',
+    assignSaving: false,
+    pendingPoolHint: '',
     podium: [],
     showFixtureModal: false,
     fixtureEditId: '',
@@ -530,10 +547,33 @@ Page({
       const showFixtures = !!(divided && (cupStarted || sessionOpen))
       const showPersonalData = !!((sessionOpen || cupStarted) && isAdmin)
       const cupEligible = (activeTeamCount === 4 || activeTeamCount === 5) && activePlayerCount >= 24
+      const pendingCountNow = pendingSorted.length
+      const signedCountNow = signedList.length
+      const assignEnabled = !!(isAdmin && !locked && signedCountNow >= ASSIGN_MIN_PLAYERS)
+      // 已满足开杯且池空时，把视觉重心让给「开启界龙杯」，一键分队降为次要
+      const assignPrimary = !!(assignEnabled && (
+        pendingCountNow > 0 || (!activity.manualRoster && !cupEligible)
+      ))
+      let assignHint = ''
+      if (isAdmin && !locked && signedCountNow > 0 && signedCountNow < ASSIGN_MIN_PLAYERS) {
+        assignHint = `满 ${ASSIGN_MIN_PLAYERS} 人后再一键分队（当前 ${signedCountNow} 人）；人少可先手动拖进各队`
+      }
+      let pendingPoolHint = ''
+      if (isAdmin && pendingCountNow > 0) {
+        pendingPoolHint = activePlayerCount > 0
+          ? `未分队池还有 ${pendingCountNow} 人，可点选或长按拖进现有队；若点「一键分队」会重排全部名单`
+          : `未分队池还有 ${pendingCountNow} 人，请点选或长按拖进各队，或点上方「一键分队」`
+      }
       let cupActionHint = ''
-      if (!cupEligible) {
+      if (isAdmin && pendingCountNow > 0) {
+        cupActionHint = pendingPoolHint
+      } else if (isAdmin && cupEligible && !cupStarted && !activity.manualRoster) {
+        cupActionHint = `已按报名顺序分成 ${activeTeamCount} 队，可直接开启；想按名册组重排再点上方「一键分队」`
+      } else if (!cupEligible) {
         if (activeTeamCount === 6) {
           cupActionHint = '6 支非空队不支持界龙杯（开赛前 2h 可直接记比分与进球/助攻/乌龙/出勤）'
+        } else if (activeTeamCount === 3 && activePlayerCount >= 24) {
+          cupActionHint = `当前 ${activePlayerCount} 人已按 8 人制分成 3 队；若要打 4 队界龙杯，请点上方「＋加一队」并调人凑齐 4 队（不开杯也可在开赛前 2h 记数据）`
         } else if (activeTeamCount < 4) {
           cupActionHint = `界龙杯需 4 或 5 队且 ≥24 人（当前 ${activeTeamCount} 队 ${activePlayerCount} 人；不开杯也可在开赛前 2h 记数据）`
         } else {
@@ -672,6 +712,10 @@ Page({
         podium,
         cupActionEnabled,
         cupActionHint,
+        assignEnabled,
+        assignPrimary,
+        assignHint,
+        pendingPoolHint,
         allSignedPlayers,
         memberFilters,
         signedMembers,
@@ -871,21 +915,40 @@ Page({
       wx.showToast({ title: '已有比分，不能重分', icon: 'none' })
       return
     }
+    if (this.data.assignSaving) return
     if (!this.data.signedCount) {
       wx.showToast({ title: '还没有人报名', icon: 'none' })
       return
     }
+    if (this.data.signedCount < ASSIGN_MIN_PLAYERS) {
+      wx.showToast({
+        title: `满 ${ASSIGN_MIN_PLAYERS} 人后再一键分队（当前 ${this.data.signedCount} 人）`,
+        icon: 'none'
+      })
+      return
+    }
+    const reshuffle = !!(this.data.activity && this.data.activity.manualRoster)
+      && (this.data.activePlayerCount || 0) > 0
     wx.showModal({
-      title: '一键分队？',
-      content: '按 8 人制（2～5 队）自动均分，同名册组优先分在同一队；超过 45 人时晚报名者留在未分队池。分完可随时拖拽微调。',
-      confirmText: '一键分队',
+      title: reshuffle ? '重新一键分队？' : '一键分队？',
+      content: reshuffle
+        ? '会清空当前各队名单和站位，按约 8 人一队重新均分；未分队池的人也会一并重排。同组的尽量同队，分完仍可拖拽微调。'
+        : '按约 8 人一队（2～5 队）自动均分，同组的尽量同队；超过 45 人时晚报名者留在未分队池。分完可拖拽微调。',
+      confirmText: reshuffle ? '重新分队' : '开始分队',
       confirmColor: '#0f3d2e',
       success: (res) => {
         if (!res.confirm) return
+        this.setData({ assignSaving: true })
+        wx.showLoading({ title: '分队中', mask: true })
         call('assignTeams', { activityId: this.data.id }).then((result) => {
           const left = result.leftoverCount ? `，未分队 ${result.leftoverCount} 人` : ''
           wx.showToast({ title: `已分成 ${result.teamCount} 队${left}`.slice(0, 30), icon: 'none' })
           this.load()
+        }).catch(() => {
+          // call() 已 toast 错误
+        }).then(() => {
+          wx.hideLoading()
+          this.setData({ assignSaving: false })
         })
       }
     })
@@ -1183,12 +1246,13 @@ Page({
     this.setData({ renameDraft: event.detail.value })
   },
   onPickRenameColor(event) {
-    const color = event.currentTarget.dataset.color
-    const label = event.currentTarget.dataset.label || ''
-    if (!color) return
+    const id = event.currentTarget.dataset.id
+    const preset = (this.data.colorPresets || []).find((item) => item.id === id)
+      || (this.data.colorPresets || []).find((item) => item.color === event.currentTarget.dataset.color)
+    if (!preset || !preset.color) return
     this.setData({
-      renameColor: color,
-      renameJerseyColor: label || this.data.renameJerseyColor
+      renameColor: preset.color,
+      renameJerseyColor: preset.label || this.data.renameJerseyColor
     })
   },
   onPickRenameName(event) {

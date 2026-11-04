@@ -858,6 +858,13 @@ async function main() {
     if ((jielong.groups || []).length !== 6) throw new Error('orgMe: jielong should have 6 roster groups')
     if ((jielong.signupModes || []).indexOf('pool') === -1) throw new Error('orgMe: jielong pool mode')
     pass('orgMe two clubs')
+    assertFail('joinClub wednesday no group', await callApi(miniProgram, 'joinClub', {
+      clubId: 'club_wednesday'
+    }))
+    assertOk('joinClub jielong invite group', await callApi(miniProgram, 'joinClub', {
+      clubId: 'club_jielong',
+      groupId: 'jl_other'
+    }))
     if (jielong.role === 'owner' || jielong.role === 'admin') {
       const created = assertOk('createActivity jielong', await callApi(miniProgram, 'createActivity', {
         clubId: 'club_jielong',
@@ -866,40 +873,47 @@ async function main() {
         startTime: Date.now() + 7 * 24 * HOUR_MS
       }))
       track(activityIds, created.activityId)
-      const createdDetail = assertOk('activityDetail jielong created', await callApi(miniProgram, 'activityDetail', {
-        activityId: created.activityId
-      }))
-      if (!createdDetail.activity || !createdDetail.activity.divided || !createdDetail.activity.manualRoster) {
-        throw new Error('createActivity jielong: expected divided+manualRoster shell')
-      }
-      if ((createdDetail.activity.teams || []).length !== 2) {
-        throw new Error('createActivity jielong: expected A/B team shell, got ' + (createdDetail.activity.teams || []).length)
-      }
-      pass('createActivity jielong pending shell')
       const signed = assertOk('signup jielong', await callApi(miniProgram, 'signup', {
         activityId: created.activityId
       }))
-      // 默认进未分队池，不自动塞进 A/B 队
-      if (!signed.signed || signed.teamId !== 'team_pending') {
-        throw new Error('signup jielong: expected team_pending, got ' + (signed.teamId || ''))
+      // 报名即按 8 人一队自动入队：第 1 人进第 1 队（A队）
+      if (!signed.signed || signed.teamId !== 'sess_a') {
+        throw new Error('signup jielong: expected sess_a, got ' + (signed.teamId || ''))
       }
-      pass('signup jielong pending')
-      // 再灌 30 人 → 共 31，仍全部在未分队池；队壳保持 2
+      pass('signup jielong placed')
+      // 再灌 30 人 → 共 31，自动扩到 4 队（8/8/8/7）
       const seeded = assertOk('smokeSeedSignups jielong', await callApi(miniProgram, 'smokeSeedSignups', {
         activityId: created.activityId,
         teamId: 'team_pending',
         status: 'signed',
         count: 30
       }))
-      if (seeded.teamCount !== 2) throw new Error('smokeSeedSignups jielong: expected 2 team shells, got ' + seeded.teamCount)
-      const detailPending = assertOk('activityDetail jielong pending pool', await callApi(miniProgram, 'activityDetail', {
+      if (seeded.teamCount !== 4) throw new Error('smokeSeedSignups jielong: expected 4 teams, got ' + seeded.teamCount)
+      const detailAuto = assertOk('activityDetail jielong auto', await callApi(miniProgram, 'activityDetail', {
         activityId: created.activityId
       }))
-      const pendingBeforeAssign = (detailPending.signups || []).filter((row) => row.status === 'signed' && row.teamId === 'team_pending')
-      if (pendingBeforeAssign.length !== 31) {
-        throw new Error('jielong pending pool: expected 31, got ' + pendingBeforeAssign.length)
+      if (!detailAuto.activity || !detailAuto.activity.divided || (detailAuto.activity.teams || []).length !== 4) {
+        throw new Error('jielong auto divide: expected 4 teams')
       }
-      pass('pending pool before assign')
+      pass('auto teams by eight')
+      // 另建一场验证：正选不足 16 人时拒绝一键分队
+      const under = assertOk('createActivity jielong under16', await callApi(miniProgram, 'createActivity', {
+        clubId: 'club_jielong',
+        title: '冒烟界龙不足16 ' + Date.now().toString(36).slice(-4),
+        location: '界龙足球基地',
+        startTime: Date.now() + 12 * 24 * 3600 * 1000
+      }))
+      activityIds.push(under.activityId)
+      assertOk('signup jielong under16', await callApi(miniProgram, 'signup', { activityId: under.activityId }))
+      assertOk('smokeSeedSignups jielong under16', await callApi(miniProgram, 'smokeSeedSignups', {
+        activityId: under.activityId,
+        teamId: 'team_pending',
+        status: 'signed',
+        count: 10
+      }))
+      assertFail('assignTeams below 16', await callApi(miniProgram, 'assignTeams', {
+        activityId: under.activityId
+      }))
       // 31 人一键智能分队 → 按 8 人制分为 4 队（8/8/8/7），0 人留未分队池
       const divided = assertOk('assignTeams by roster', await callApi(miniProgram, 'assignTeams', {
         activityId: created.activityId

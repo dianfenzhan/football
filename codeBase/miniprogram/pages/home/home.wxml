@@ -11,7 +11,7 @@
     <view wx:if="{{noClub}}" class="hero hero-empty">
       <view class="empty-icon">⚽️</view>
       <view class="empty-title">还没有加入球队</view>
-      <view class="empty-sub">请让管理员把活动分享给你，打开链接报名后会自动加入</view>
+      <view class="empty-sub">请让管理员把球队或活动分享给你，打开链接加入</view>
     </view>
     <block wx:elif="{{next}}">
       <view class="next-block">

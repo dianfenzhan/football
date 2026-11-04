@@ -36,9 +36,13 @@
     <view class="roster-bar">
       <view class="section-title" style="margin-bottom: 0;">已报名 {{signedCount}} 人</view>
       <view wx:if="{{isAdmin && !locked && signedCount}}" class="roster-bar-actions">
-        <view class="roster-action-pill primary" bindtap="assignByRoster">⚡ 一键分队</view>
+        <view
+          class="roster-action-pill {{assignEnabled ? 'primary' : 'disabled'}}"
+          bindtap="assignByRoster"
+        >{{assignSaving ? '分队中…' : '⚡ 一键分队'}}</view>
       </view>
     </view>
+    <text wx:if="{{isAdmin && assignHint}}" class="assign-hint">{{assignHint}}</text>
     <view wx:if="{{!signedCount}}" class="empty">还没有人报名</view>
   </view>
 
@@ -49,9 +53,13 @@
         <text class="roster-bar-sub">{{activeTeamCount}} 队 · {{activePlayerCount}} 人</text>
       </view>
       <view wx:if="{{isAdmin && !locked && signedCount}}" class="roster-bar-actions">
-        <view class="roster-action-pill {{pendingCount ? 'primary' : ''}}" bindtap="assignByRoster">⚡ 一键分队</view>
+        <view
+          class="roster-action-pill {{assignEnabled ? (assignPrimary ? 'primary' : '') : 'disabled'}}"
+          bindtap="assignByRoster"
+        >{{assignSaving ? '分队中…' : '⚡ 一键分队'}}</view>
       </view>
     </view>
+    <text wx:if="{{isAdmin && assignHint}}" class="assign-hint">{{assignHint}}</text>
     <view class="muted roster-tip" wx:if="{{isAdmin && draggingId}}">{{dragHint}}</view>
     <view
       class="roster-drag-area {{draggingId ? 'is-dragging' : ''}}"
@@ -115,6 +123,7 @@
           <text class="pending-pool-label">未分队池</text>
           <text class="pending-pool-count">{{pendingCount}} 人</text>
         </view>
+        <text wx:if="{{isAdmin && pendingPoolHint}}" class="pending-pool-hint">{{pendingPoolHint}}</text>
         <view wx:if="{{!pendingCount}}" class="pending-pool-empty">{{isAdmin ? '拖到这里或点选队员放入未分队' : '暂无未分队队员'}}</view>
         <view wx:else class="pending-pool-chips">
           <view
@@ -551,8 +560,7 @@
           wx:for="{{colorPresets}}"
           wx:key="id"
           class="roster-chip {{renameColor === item.color ? 'on' : ''}}"
-          data-color="{{item.color}}"
-          data-label="{{item.label}}"
+          data-id="{{item.id}}"
           bindtap="onPickRenameColor"
         >
           <view class="dot" style="background: {{item.color}};"></view>

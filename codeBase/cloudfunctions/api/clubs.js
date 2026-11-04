@@ -616,6 +616,8 @@ function shouldAutoFixture(teamCount) {
 }
 
 const CUP_MIN_PLAYERS = 24
+/** 一键分队最低正选人数（与界龙杯 24 人门槛独立） */
+const ASSIGN_MIN_PLAYERS = 16
 
 function evaluateJielongCup(teams, signups) {
   const teamList = (teams || []).filter((team) => team && team.id && team.id !== PENDING_TEAM)
@@ -819,6 +821,7 @@ module.exports = {
   cupFixtures,
   shouldAutoFixture,
   CUP_MIN_PLAYERS,
+  ASSIGN_MIN_PLAYERS,
   evaluateJielongCup,
   isCupTeamsDrifted,
   rankTeams,

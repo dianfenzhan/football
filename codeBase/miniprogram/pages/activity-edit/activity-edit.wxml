@@ -16,7 +16,7 @@
       <text class="label">时间</text>
       <picker mode="time" value="{{time}}" bindchange="onTime"><view class="picker-value">{{time}}</view></picker>
     </view>
-    <view class="muted">报名不设人数上限；默认进「未分队」池，由管理员手动分到 A/B… 队（最多 6 队）。</view>
+    <view class="muted">报名不设人数上限，按报名顺序每满 8 人自动新开一队（A队、B队…）；满 16 人可一键按名册组智能分队，管理员分队或调人后新报名进「未分队」池。</view>
     <button class="btn" loading="{{saving}}" bindtap="submit">创建</button>
   </view>
   <view class="card" wx:else>

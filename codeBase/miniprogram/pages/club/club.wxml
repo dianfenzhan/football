@@ -1,9 +1,9 @@
 <view class="page">
   <club-nav title="球队" show-back="{{true}}" bind:change="onFilterChange" />
-  <view class="muted tip">入队请走活动分享链接报名。这里只维护已加入球队的分组；多队时用顶栏下方芯片切换筛选。</view>
+  <view class="muted tip">管理员可点「邀请入队」分享给球友；打开链接确认资料并选分组后加入。也可继续用活动分享报名入队。多队时用顶栏下方芯片切换筛选。</view>
 
   <view wx:if="{{!clubs.length}}" class="card muted">
-    球队信息还没同步。请让管理员把活动分享给你，打开链接报名后会自动加入。
+    球队信息还没同步。请让管理员把球队或活动分享给你，打开链接加入。
   </view>
 
   <view wx:for="{{clubs}}" wx:key="_id" class="card">
@@ -11,16 +11,23 @@
       <view class="title">{{item.name}}</view>
       <view class="badge" wx:if="{{item.joined}}">已加入</view>
     </view>
-    <view class="muted" wx:if="{{item._id === 'club_jielong'}}">界龙不用选常驻组。报名后由老板当场分队。</view>
+    <view class="muted" wx:if="{{item._id === 'club_jielong'}}">界龙报名后由老板当场分队；入队时请确认名册分组（默认可选散客「未分组」）。</view>
     <view class="muted" wx:else>可改默认报名分组。只影响之后新报名的场次。</view>
+
+    <button
+      wx:if="{{item.canInvite}}"
+      class="btn invite-btn"
+      open-type="share"
+      data-club="{{item._id}}"
+    >邀请入队</button>
 
     <block wx:if="{{item._id === 'club_jielong'}}">
       <view wx:if="{{item.joined}}" class="joined">你已加入，可以直接去活动页报名。</view>
-      <view wx:else class="muted">尚未加入。请打开分享来的界龙活动链接报名。</view>
+      <view wx:else class="muted">尚未加入。打开邀请链接或活动分享即可入队。</view>
     </block>
 
     <block wx:else>
-      <view wx:if="{{!item.joined}}" class="muted">尚未加入。请打开分享来的周三联活动链接报名。</view>
+      <view wx:if="{{!item.joined}}" class="muted">尚未加入。打开邀请链接或活动分享即可入队。</view>
       <block wx:if="{{item.joined}}">
         <view wx:for="{{item.groups}}" wx:for-item="group" wx:for-index="gIndex" wx:key="id" class="group-block">
           <view class="group">
@@ -50,13 +57,12 @@
             <view
               wx:for="{{colors}}"
               wx:for-item="swatch"
-              wx:key="label"
+              wx:key="id"
               class="dot"
               style="background: {{swatch.color}};"
               data-club="{{item._id}}"
               data-group="{{group.id}}"
-              data-color="{{swatch.color}}"
-              data-label="{{swatch.label}}"
+              data-id="{{swatch.id}}"
               bindtap="onColor"
             ></view>
           </view>
@@ -65,4 +71,45 @@
     </block>
   </view>
   <nav current="me" />
+</view>
+
+<view wx:if="{{showInvite}}" class="share-mask" catchtouchmove="noop">
+  <view class="share-sheet">
+    <view class="title">{{inviteTitle}}</view>
+    <view class="muted">确认个人资料并选择分组后加入。有资料会自动带出，可改。</view>
+    <view class="reg-avatar-row">
+      <button class="avatar-chooser" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar">
+        <image wx:if="{{regAvatarUrl}}" class="avatar-img" src="{{regAvatarUrl}}" mode="aspectFill"/>
+        <text wx:else class="avatar-plus">+</text>
+      </button>
+      <view class="muted">点头像，选微信头像（选填）</view>
+    </view>
+    <view class="roster-label">昵称（必填）</view>
+    <input type="nickname" class="input reg-input" placeholder="点这里快捷填入微信昵称" value="{{regName}}" maxlength="16" bindinput="onRegName"/>
+    <view class="roster-label">擅长位置（选填）</view>
+    <view class="reg-positions">
+      <view
+        wx:for="{{positions}}"
+        wx:key="id"
+        class="reg-pos {{regPosition === item.id ? 'active' : ''}}"
+        data-id="{{item.id}}"
+        bindtap="onRegPosition"
+      >{{item.label}}</view>
+    </view>
+    <view class="roster-label">名册分组（必选）</view>
+    <view class="roster-chips">
+      <view
+        wx:for="{{inviteGroups}}"
+        wx:key="id"
+        class="roster-chip {{pickGroupId === item.id ? 'on' : ''}}"
+        data-id="{{item.id}}"
+        bindtap="onPickGroup"
+      >
+        <view class="dot" style="background: {{item.color}};"></view>
+        <text>{{item.name}}</text>
+      </view>
+    </view>
+    <button class="btn" loading="{{regSaving}}" disabled="{{regSaving}}" bindtap="submitInvite">保存并加入</button>
+    <button class="btn ghost" bindtap="closeInvite">取消</button>
+  </view>
 </view>

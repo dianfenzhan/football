@@ -67,7 +67,7 @@
     <view class="club-title-row">
       <view class="title">我的球队</view>
     </view>
-    <view class="join-hint">请让管理员把活动分享给你</view>
+    <view class="join-hint">管理员可点「邀请入队」分享给球友；也可继续用活动链接邀请报名。</view>
 
     <view wx:if="{{!clubs.length}}" class="empty-club">
       <view class="empty-title">还没有球队</view>
@@ -76,8 +76,17 @@
 
     <view wx:for="{{clubs}}" wx:key="_id" class="club-card">
       <view class="club-head">
-        <view class="club-name">{{item.name}}</view>
-        <view class="badge">{{item.roleLabel}}</view>
+        <view class="club-head-left">
+          <view class="club-name">{{item.name}}</view>
+          <view class="badge">{{item.roleLabel}}</view>
+        </view>
+        <button
+          wx:if="{{item.canInvite}}"
+          class="invite-link"
+          open-type="share"
+          data-club="{{item._id}}"
+          hover-class="invite-link-hover"
+        >邀请入队</button>
       </view>
 
       <block wx:if="{{item.hasGroups}}">

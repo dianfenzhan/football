@@ -43,6 +43,8 @@ function decorateClubs(clubs, multiReady) {
         hasGroups: groups.length > 0,
         roleLabel: roleLabel(club.role),
         canEditGroup: !!multiReady
+          && (club.role === 'owner' || club.role === 'admin'),
+        canInvite: !!multiReady
           && (club.role === 'owner' || club.role === 'admin')
       }
     })
@@ -134,8 +136,19 @@ Page({
     justSaved: false
   },
   onShow() {
+    wx.showShareMenu({ withShareTicket: true, menus: ['shareAppMessage'] })
     this.loadProfile()
     this.loadClubs()
+  },
+  onShareAppMessage(res) {
+    const fromButton = res && res.target && res.target.dataset && res.target.dataset.club
+    const clubId = fromButton || ''
+    const club = (this.data.clubs || []).find((item) => item._id === clubId)
+    const name = (club && club.name) || '球队'
+    return {
+      title: `邀请你加入${name}`,
+      path: `/pages/club/club?invite=1&clubId=${clubId || ''}`
+    }
   },
   loadProfile() {
     call('me').then((res) => {

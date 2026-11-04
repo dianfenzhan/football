@@ -90,6 +90,12 @@ async function walkAdmin(mp) {
 
   if (jl.activityId) {
     await call(mp, 'signup', { activityId: jl.activityId })
+    await call(mp, 'smokeSeedSignups', {
+      activityId: jl.activityId,
+      teamId: 'team_pending',
+      status: 'signed',
+      count: 15
+    })
     const assign = await call(mp, 'assignTeams', { activityId: jl.activityId })
     note(role, 'jielong assignTeams', !!assign.ok, assign.message || `teams=${assign.teamCount}`)
     const sess = await mp.reLaunch(`/pages/session/session?id=${jl.activityId}`)

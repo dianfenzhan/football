@@ -20,6 +20,8 @@ const {
   divideByRosterGroups,
   cupFixtures,
   shouldAutoFixture,
+  ASSIGN_MIN_PLAYERS,
+  CUP_MIN_PLAYERS,
   evaluateJielongCup,
   isCupTeamsDrifted,
   finalsForFour,
@@ -107,6 +109,11 @@ test('auto session placement grows a team every eight players', () => {
   const ninth = autoSessionPlacement(8, first.teams, 8)
   assert.equal(ninth.teamCount, 2)
   assert.equal(ninth.teamId, 'sess_b')
+})
+
+test('assign min players is 16 and independent of cup min 24', () => {
+  assert.equal(ASSIGN_MIN_PLAYERS, 16)
+  assert.equal(CUP_MIN_PLAYERS, 24)
 })
 
 test('smart divide around 8 keeps same-tag players together, caps at 5 teams, and only overflows >45', () => {
