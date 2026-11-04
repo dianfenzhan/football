@@ -900,13 +900,15 @@ async function main() {
         throw new Error('jielong pending pool: expected 31, got ' + pendingBeforeAssign.length)
       }
       pass('pending pool before assign')
+      // 31 人一键智能分队 → 按 8 人制分为 4 队（8/8/8/7），0 人留未分队池
       const divided = assertOk('assignTeams by roster', await callApi(miniProgram, 'assignTeams', {
         activityId: created.activityId
       }))
-      if (divided.teamCount !== 6) throw new Error('assignTeams: expected 6 roster teams, got ' + divided.teamCount)
+      if (divided.teamCount !== 4) throw new Error('assignTeams: expected 4 teams for 31 players, got ' + divided.teamCount)
       if (divided.assignedCount !== 31) throw new Error('assignTeams: expected 31 assigned, got ' + divided.assignedCount)
-      if (divided.fixtureCount !== 0) throw new Error('assignTeams: expected 0 auto fixtures for 6 teams, got ' + divided.fixtureCount)
-      pass('assignTeams by roster six')
+      if (divided.leftoverCount !== 0) throw new Error('assignTeams: expected 0 leftover, got ' + divided.leftoverCount)
+      if (divided.fixtureCount !== 0) throw new Error('assignTeams: expected 0 auto fixtures before cup start, got ' + divided.fixtureCount)
+      pass('assignTeams smart four')
       // 分队后，新报名仍进「未分队」池
       assertOk('smokeSeedSignups jielong after manual', await callApi(miniProgram, 'smokeSeedSignups', {
         activityId: created.activityId,
@@ -924,9 +926,22 @@ async function main() {
       if (pendingAfterManual.length !== 2) {
         throw new Error('jielong manualRoster: expected 2 pending signups, got ' + pendingAfterManual.length)
       }
-      if ((detail.rounds || []).length !== 0) throw new Error('activityDetail jielong: 6 teams should start with 0 auto rounds')
+      if ((detail.rounds || []).length !== 0) throw new Error('activityDetail jielong: should start with 0 auto rounds before cup')
       pass('activityDetail divided')
-      // 6 队手动添加、删除场次
+      // 补加 2 支空队到 6 队，验证加队上限与删空队
+      const added5 = assertOk('addSessionTeam fifth', await callApi(miniProgram, 'addSessionTeam', {
+        activityId: created.activityId
+      }))
+      if (added5.teamCount !== 5) throw new Error('addSessionTeam: expected 5 teams')
+      const added6 = assertOk('addSessionTeam sixth', await callApi(miniProgram, 'addSessionTeam', {
+        activityId: created.activityId
+      }))
+      if (added6.teamCount !== 6) throw new Error('addSessionTeam: expected 6 teams')
+      // 6 队已满，不能再加
+      assertFail('addSessionTeam full', await callApi(miniProgram, 'addSessionTeam', {
+        activityId: created.activityId
+      }))
+      // 手动添加、删除场次
       const manualFixture = assertOk('addFixture manual', await callApi(miniProgram, 'addFixture', {
         activityId: created.activityId,
         roundNo: 1,
@@ -982,18 +997,15 @@ async function main() {
           roundId: row._id || row.roundId
         }))
       }
-      // 6 队已满，不能再加
-      assertFail('addSessionTeam full', await callApi(miniProgram, 'addSessionTeam', {
-        activityId: created.activityId
-      }))
-      // 假人无名册组，一键分队后大多在最后一队；有人的队不可删，空队可删
+      // 有人的队不可删，空队可删
       const byTeam = {}
       ;(detail.signups || []).filter((row) => row.status === 'signed').forEach((row) => {
         if (!byTeam[row.teamId]) byTeam[row.teamId] = []
         byTeam[row.teamId].push(row)
       })
-      const occupiedId = (divided.teams || []).map((team) => team.id).find((id) => (byTeam[id] || []).length > 0)
-      const emptyId = (divided.teams || []).map((team) => team.id).find((id) => !(byTeam[id] || []).length)
+      const currentTeamList = (added6.teams || [])
+      const occupiedId = currentTeamList.map((team) => team.id).find((id) => (byTeam[id] || []).length > 0)
+      const emptyId = currentTeamList.map((team) => team.id).find((id) => !(byTeam[id] || []).length)
       if (!occupiedId || !emptyId) throw new Error('roster split: need both occupied and empty team')
       const occupiedPlayer = (byTeam[occupiedId] || [])[0]
       assertOk('saveTacticsBoard jielong', await callApi(miniProgram, 'saveTacticsBoard', {
@@ -1024,22 +1036,7 @@ async function main() {
       }))
       if ((removed.teams || []).length !== 5) throw new Error('removeSessionTeam: expected 5 teams')
       if (removed.fixtureCount !== 0) throw new Error('removeSessionTeam: expected 0 auto fixtures, got ' + removed.fixtureCount)
-      assertFail('startJielongCup too few active teams', await callApi(miniProgram, 'startJielongCup', {
-        activityId: created.activityId
-      }))
-      const remainingTeams = (removed.teams || []).map((t) => t.id)
-      const fullTeamId = remainingTeams.find((id) => (byTeam[id] || []).length >= 10)
-      const alreadyOccupiedCount = remainingTeams.filter((id) => (byTeam[id] || []).length > 0).length
-      const neededEmptyCount = Math.max(0, 4 - alreadyOccupiedCount)
-      const otherEmptyIds = remainingTeams.filter((id) => !(byTeam[id] || []).length).slice(0, neededEmptyCount)
-      for (let idx = 0; idx < otherEmptyIds.length; idx += 1) {
-        const p = byTeam[fullTeamId][idx]
-        assertOk('adminMoveSignup for cup', await callApi(miniProgram, 'adminMoveSignup', {
-          activityId: created.activityId,
-          targetOpenid: p._openid,
-          teamId: otherEmptyIds[idx]
-        }))
-      }
+      // 4 支非空队（8/8/8/7 共 31 人）+ 1 支空队 → 直接开启 4 队界龙杯
       const cupRes = assertOk('startJielongCup four active teams', await callApi(miniProgram, 'startJielongCup', {
         activityId: created.activityId
       }))

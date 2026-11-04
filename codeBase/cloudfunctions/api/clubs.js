@@ -340,39 +340,197 @@ function dividePlayers(players, teamCount, targetSize = 8) {
   }
 }
 
-/** 按名册组落到 6 个场次队；无名册组进最后一队（散客） */
+const SMART_MAX_TEAMS = 5
+const SMART_MAX_PER_TEAM = 9
+const SMART_MAX_CAPACITY = SMART_MAX_TEAMS * SMART_MAX_PER_TEAM
+
+/**
+ * 围绕 8 人（2～5 队，≤45 人全部进队不留池）计算分成几队及每队容量
+ * - ≤19 → 2 队；20–27 → 3 队；28–36 → 4 队；37–45 → 5 队；>45 → 5×9=45，余者留未分队池
+ */
+function smartTeamCapacities(totalPlayers) {
+  const n = Math.max(0, Number(totalPlayers) || 0)
+  const takeCount = Math.min(n, SMART_MAX_CAPACITY)
+  let teamCount = 2
+  if (takeCount >= 37) teamCount = 5
+  else if (takeCount >= 28) teamCount = 4
+  else if (takeCount >= 20) teamCount = 3
+  else teamCount = 2
+  const base = Math.floor(takeCount / teamCount)
+  const rem = takeCount % teamCount
+  const capacities = Array.from({ length: teamCount }, (_, idx) => base + (idx < rem ? 1 : 0))
+  return { teamCount, takeCount, capacities }
+}
+
+/**
+ * 一键智能分队：
+ * 1. 按 8 人制（2～5 队，每队弹性 7–9 人，≤45 人 0 留池，>45 人晚报名留未分队池）定好每队容量
+ * 2. 同名册组（非「未分组」）尽量整团进同一队：
+ *    - 先用完整容量接纳大团（≥容量时先切整队，零头再作为小团）
+ *    - 小团按从大到小优先放入能完整容纳的队，实在放不下才拆开填缝
+ * 3. 「未分组」作为机动散沙填满剩余空位
+ * 4. 某队若单一非默认名册组占比 ≥50%（且 ≥2 人）且该组名未被其它队占用，自动带出该组队名与球衣色；否则保持 A队～E队
+ */
 function divideByRosterGroups(players, groupIdOf, rosterGroups) {
-  const groups = Array.isArray(rosterGroups) && rosterGroups.length
-    ? rosterGroups.slice(0, SESSION_TEAM_STYLES.length)
-    : []
-  const teams = SESSION_TEAM_STYLES.map((style, index) => {
-    const group = groups[index]
-    if (!group) return Object.assign({}, style)
-    return Object.assign({}, style, {
-      name: group.name || style.name,
-      color: group.color || style.color,
-      jerseyColor: group.jerseyColor || style.jerseyColor,
-      rosterGroupId: group.id
-    })
+  const all = Array.isArray(players) ? players.slice() : []
+  const groups = Array.isArray(rosterGroups) ? rosterGroups : []
+  const groupMetaById = {}
+  const namedGroupIds = []
+  groups.forEach((group) => {
+    if (!group || !group.id) return
+    groupMetaById[group.id] = group
+    if (group.id !== JIELONG_DEFAULT_GROUP) namedGroupIds.push(group.id)
   })
-  const groupToTeam = {}
-  groups.forEach((group, index) => {
-    if (group && group.id) groupToTeam[group.id] = teams[index].id
-  })
-  const fallbackTeamId = teams[teams.length - 1].id
-  const assignments = {}
-  teams.forEach((team) => { assignments[team.id] = [] })
-  ;(players || []).forEach((player) => {
+
+  const { teamCount, takeCount, capacities } = smartTeamCapacities(all.length)
+  const take = all.slice(0, takeCount)
+  const leftover = all.slice(takeCount)
+  const baseTeams = SESSION_TEAM_STYLES.slice(0, teamCount).map((style) => Object.assign({}, style))
+
+  const buckets = Array.from({ length: teamCount }, (_, idx) => ({
+    capacity: capacities[idx],
+    members: [],
+    groupCounts: {}
+  }))
+  const pushToBucket = (bucketIdx, item) => {
+    const b = buckets[bucketIdx]
+    b.members.push(item.player)
+    if (item.groupId && item.groupId !== JIELONG_DEFAULT_GROUP) {
+      b.groupCounts[item.groupId] = (b.groupCounts[item.groupId] || 0) + 1
+    }
+  }
+  const remOf = (bucketIdx) => buckets[bucketIdx].capacity - buckets[bucketIdx].members.length
+
+  // 按名册组聚团，「未分组」与未知组归入机动池
+  const byGroup = {}
+  const flexible = []
+  take.forEach((player) => {
     const openid = player && (player._openid || player.openid)
-    const groupId = typeof groupIdOf === 'function' ? groupIdOf(openid, player) : ''
-    const teamId = (groupId && groupToTeam[groupId]) || fallbackTeamId
-    assignments[teamId].push(player)
+    const rawGroup = typeof groupIdOf === 'function' ? groupIdOf(openid, player) : ''
+    const groupId = rawGroup && groupMetaById[rawGroup] && rawGroup !== JIELONG_DEFAULT_GROUP
+      ? rawGroup
+      : ''
+    if (!groupId) {
+      flexible.push({ player, groupId: '' })
+      return
+    }
+    if (!byGroup[groupId]) byGroup[groupId] = []
+    byGroup[groupId].push({ player, groupId })
   })
+
+  // Step 1：超大团（人数 ≥ 某空筐容量）先装满整筐，零头留作小团
+  const chunks = []
+  const sortedGroupIds = Object.keys(byGroup).sort((a, b) => (
+    byGroup[b].length - byGroup[a].length
+    || namedGroupIds.indexOf(a) - namedGroupIds.indexOf(b)
+  ))
+  sortedGroupIds.forEach((groupId) => {
+    let items = byGroup[groupId].slice()
+    while (items.length > 0) {
+      // 找一个当前完全为空且容量 <= items.length 的筐（优先容量最接近的）
+      let bestIdx = -1
+      for (let i = 0; i < teamCount; i += 1) {
+        if (buckets[i].members.length === 0 && buckets[i].capacity > 0 && items.length >= buckets[i].capacity) {
+          if (bestIdx === -1 || buckets[i].capacity > buckets[bestIdx].capacity) bestIdx = i
+        }
+      }
+      if (bestIdx === -1) break
+      const cap = buckets[bestIdx].capacity
+      const head = items.slice(0, cap)
+      items = items.slice(cap)
+      head.forEach((it) => pushToBucket(bestIdx, it))
+    }
+    if (items.length > 0) {
+      chunks.push({ groupId, items })
+    }
+  })
+
+  // Step 2：其余名册团按从大到小，优先整团塞进能完整装下的筐（优先剩余容量刚好贴合的筐，避免碎片）
+  chunks.sort((a, b) => b.items.length - a.items.length)
+  const spillover = []
+  chunks.forEach((chunk) => {
+    const size = chunk.items.length
+    let fitIdx = -1
+    for (let i = 0; i < teamCount; i += 1) {
+      const rem = remOf(i)
+      if (rem >= size) {
+        // 优先空筐（让大团独占），其次剩余空间最紧凑的筐
+        if (fitIdx === -1) {
+          fitIdx = i
+        } else {
+          const curEmpty = buckets[i].members.length === 0
+          const bestEmpty = buckets[fitIdx].members.length === 0
+          if (curEmpty && !bestEmpty) fitIdx = i
+          else if (curEmpty === bestEmpty && rem < remOf(fitIdx)) fitIdx = i
+        }
+      }
+    }
+    if (fitIdx !== -1) {
+      chunk.items.forEach((it) => pushToBucket(fitIdx, it))
+      return
+    }
+    // 没有任何单筐能整团装下：先找当前剩余最大的筐装入大头，余下进 spillover
+    let largestIdx = 0
+    for (let i = 1; i < teamCount; i += 1) {
+      if (remOf(i) > remOf(largestIdx)) largestIdx = i
+    }
+    const takeHere = Math.max(0, remOf(largestIdx))
+    chunk.items.slice(0, takeHere).forEach((it) => pushToBucket(largestIdx, it))
+    chunk.items.slice(takeHere).forEach((it) => spillover.push(it))
+  })
+
+  // Step 3：先放 spillover（尽量让同组余数挨着），再用「未分组」机动散沙补满所有筐
+  const tailPool = spillover.concat(flexible)
+  let cursor = 0
+  for (let i = 0; i < teamCount; i += 1) {
+    while (remOf(i) > 0 && cursor < tailPool.length) {
+      pushToBucket(i, tailPool[cursor])
+      cursor += 1
+    }
+  }
+
+  // Step 4：若某队单一名册组占比 ≥50%（且 ≥2 人），自动带出该组名与球衣色（不重名）
+  const usedGroupNames = new Set()
+  const teams = baseTeams.map((style, idx) => {
+    const b = buckets[idx]
+    const total = b.members.length
+    let dominantId = ''
+    let dominantCount = 0
+    Object.keys(b.groupCounts).forEach((gid) => {
+      const c = b.groupCounts[gid]
+      if (c > dominantCount) {
+        dominantCount = c
+        dominantId = gid
+      }
+    })
+    const group = dominantId ? groupMetaById[dominantId] : null
+    if (
+      group
+      && dominantCount >= 2
+      && dominantCount * 2 >= total
+      && !usedGroupNames.has(group.id)
+    ) {
+      usedGroupNames.add(group.id)
+      return Object.assign({}, style, {
+        name: group.name || style.name,
+        color: group.color || style.color,
+        jerseyColor: group.jerseyColor || style.jerseyColor,
+        rosterGroupId: group.id
+      })
+    }
+    return Object.assign({}, style)
+  })
+
+  const assignments = {}
+  teams.forEach((team, idx) => {
+    assignments[team.id] = buckets[idx].members
+  })
+
   return {
     teams,
     assignments,
-    assignedCount: (players || []).length,
-    leftover: []
+    assignedCount: take.length,
+    leftover
   }
 }
 

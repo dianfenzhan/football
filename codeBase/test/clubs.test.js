@@ -109,22 +109,52 @@ test('auto session placement grows a team every eight players', () => {
   assert.equal(ninth.teamId, 'sess_b')
 })
 
-test('divide by roster groups fills six session teams', () => {
+test('smart divide around 8 keeps same-tag players together, caps at 5 teams, and only overflows >45', () => {
   const groups = clubSeed(CLUB_JIELONG).groups
-  const players = [
-    { _id: '1', _openid: 'a' },
-    { _id: '2', _openid: 'b' },
-    { _id: '3', _openid: 'c' }
+  // 1) 32 人：塔子 7 + 界龙 9 + 伤心 5 + 汤姆 3 + 未分组 8 -> 4 队各 8 人，同组抱团，塔子/界龙自动带组名与球衣色
+  const roster32 = [
+    ...Array.from({ length: 7 }, (_, i) => ({ _id: `tz_${i}`, _openid: `tz_${i}`, group: 'jl_tazi' })),
+    ...Array.from({ length: 9 }, (_, i) => ({ _id: `jl_${i}`, _openid: `jl_${i}`, group: 'jl_jielong' })),
+    ...Array.from({ length: 5 }, (_, i) => ({ _id: `sx_${i}`, _openid: `sx_${i}`, group: 'jl_shangxin' })),
+    ...Array.from({ length: 3 }, (_, i) => ({ _id: `tm_${i}`, _openid: `tm_${i}`, group: 'jl_tangmu' })),
+    ...Array.from({ length: 8 }, (_, i) => ({ _id: `un_${i}`, _openid: `un_${i}`, group: 'jl_other' }))
   ]
-  const plan = divideByRosterGroups(
-    players,
-    (openid) => ({ a: 'jl_tazi', b: 'jl_aiqing', c: '' }[openid]),
-    groups
+  const map32 = {}
+  roster32.forEach((p) => { map32[p._openid] = p.group })
+  const plan32 = divideByRosterGroups(roster32, (id) => map32[id], groups)
+  assert.equal(plan32.teams.length, 4)
+  assert.equal(plan32.assignedCount, 32)
+  assert.equal(plan32.leftover.length, 0)
+  assert.deepEqual(plan32.teams.map((t) => plan32.assignments[t.id].length), [8, 8, 8, 8])
+  // 塔子 7 人应全部在同一支队，且该队自动命名为「塔子🕊」
+  const taziTeam = plan32.teams.find((t) => t.rosterGroupId === 'jl_tazi')
+  assert.ok(taziTeam, 'tazi dominant team should adopt group name')
+  assert.equal(taziTeam.name, '塔子🕊')
+  const taziInTeam = plan32.assignments[taziTeam.id].filter((p) => p.group === 'jl_tazi').length
+  assert.equal(taziInTeam, 7)
+  // 伤心 5 人与汤姆 3 人均不应被拆散
+  const teamContainingAll = (groupKey, expected) => plan32.teams.some(
+    (t) => plan32.assignments[t.id].filter((p) => p.group === groupKey).length === expected
   )
-  assert.equal(plan.teams.length, 6)
-  assert.equal(plan.assignments.sess_a.length, 1)
-  assert.equal(plan.assignments.sess_e.length, 1)
-  assert.equal(plan.assignments.sess_f.length, 1)
+  assert.equal(teamContainingAll('jl_shangxin', 5), true)
+  assert.equal(teamContainingAll('jl_tangmu', 3), true)
+
+  // 2) 31 人全未分组 -> 4 队 [8,8,8,7]，0 留池，队名保持 A队~D队
+  const plain31 = Array.from({ length: 31 }, (_, i) => ({ _id: `p_${i}`, _openid: `p_${i}` }))
+  const plan31 = divideByRosterGroups(plain31, () => 'jl_other', groups)
+  assert.equal(plan31.teams.length, 4)
+  assert.equal(plan31.assignedCount, 31)
+  assert.equal(plan31.leftover.length, 0)
+  assert.deepEqual(plan31.teams.map((t) => plan31.assignments[t.id].length), [8, 8, 8, 7])
+  assert.deepEqual(plan31.teams.map((t) => t.name), ['A队', 'B队', 'C队', 'D队'])
+
+  // 3) 48 人 -> 5 队各 9 人（45 人），多余 3 人进 leftover（未分队池）
+  const big48 = Array.from({ length: 48 }, (_, i) => ({ _id: `b_${i}`, _openid: `b_${i}` }))
+  const plan48 = divideByRosterGroups(big48, () => '', groups)
+  assert.equal(plan48.teams.length, 5)
+  assert.equal(plan48.assignedCount, 45)
+  assert.equal(plan48.leftover.length, 3)
+  assert.deepEqual(plan48.teams.map((t) => plan48.assignments[t.id].length), [9, 9, 9, 9, 9])
 })
 
 test('auto fixtures only for 4/5 teams, 3-1-1-1 for 4 teams + final pitch avoidance, and 2 each for 5 teams', () => {

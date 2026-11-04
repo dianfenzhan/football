@@ -528,6 +528,12 @@ async function assignTeams(openid, event) {
       })
     }
   }
+  const leftover = plan.leftover || []
+  for (let index = 0; index < leftover.length; index += 1) {
+    await db.collection('signups').doc(leftover[index]._id).update({
+      data: { teamId: PENDING_TEAM, sessionOrder: index, updatedAt: Date.now() }
+    })
+  }
   const fixtureCount = 0
   const targetPerTeam = activity.targetPerTeam || club.config.defaultTeamSize || 8
   await db.collection('activities').doc(activity._id).update({
@@ -544,7 +550,7 @@ async function assignTeams(openid, event) {
     teamCount: plan.teams.length,
     targetPerTeam,
     assignedCount: plan.assignedCount,
-    leftoverCount: 0,
+    leftoverCount: leftover.length,
     fixtureCount,
     teams: plan.teams,
     byRoster: true

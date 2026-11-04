@@ -35,6 +35,9 @@
   <view class="card" wx:if="{{!divided}}">
     <view class="roster-bar">
       <view class="section-title" style="margin-bottom: 0;">已报名 {{signedCount}} 人</view>
+      <view wx:if="{{isAdmin && !locked && signedCount}}" class="roster-bar-actions">
+        <view class="roster-action-pill primary" bindtap="assignByRoster">⚡ 一键分队</view>
+      </view>
     </view>
     <view wx:if="{{!signedCount}}" class="empty">还没有人报名</view>
   </view>
@@ -44,6 +47,9 @@
       <view class="roster-bar-title">
         <text class="section-title" style="margin-bottom: 0;">分队名单</text>
         <text class="roster-bar-sub">{{activeTeamCount}} 队 · {{activePlayerCount}} 人</text>
+      </view>
+      <view wx:if="{{isAdmin && !locked && signedCount}}" class="roster-bar-actions">
+        <view class="roster-action-pill {{pendingCount ? 'primary' : ''}}" bindtap="assignByRoster">⚡ 一键分队</view>
       </view>
     </view>
     <view class="muted roster-tip" wx:if="{{isAdmin && draggingId}}">{{dragHint}}</view>
@@ -354,6 +360,7 @@
         </view>
 
         <view wx:if="{{isAdmin}}" class="fixture-actions">
+          <text wx:if="{{item.scored && showPersonalData}}" class="tiny link" data-teama="{{item.teamAId}}" data-teamb="{{item.teamBId}}" bindtap="jumpToMatchPlayerStats">⚽️ 记本场进球/助攻 ›</text>
           <text wx:if="{{!item.scored}}" class="tiny link" data-id="{{item._id}}" bindtap="openEditFixture">修改场次</text>
           <text wx:if="{{!item.scored}}" class="tiny link" data-id="{{item._id}}" bindtap="swapFixtureSides">对调主客</text>
           <text wx:if="{{group.matches.length === 1}}" class="tiny link" data-round="{{item.roundNo}}" bindtap="swapPitch">切1/2号场</text>
@@ -365,7 +372,7 @@
     <view wx:if="{{isAdmin}}" class="add-dir-bar" bindtap="addRoundDirectory">＋ 新增下一轮目录</view>
   </view>
 
-  <view wx:if="{{showPersonalData}}" class="card">
+  <view id="personal-stats-card" wx:if="{{showPersonalData}}" class="card">
     <view class="section-title">记录球员数据</view>
     <view wx:if="{{signedMembers.length === 0}}" class="muted">这场还没有人报名。</view>
     <block wx:else>
@@ -415,7 +422,7 @@
     </block>
   </view>
 
-  <view class="card" wx:if="{{sessionOpen && (isAdmin || records.length)}}">
+  <view class="card" wx:if="{{(sessionOpen || cupStarted) && (isAdmin || records.length)}}">
     <view class="section-title">本场球员数据</view>
     <view wx:if="{{records.length === 0}}" class="empty">还没有记录球员数据</view>
     <view wx:for="{{records}}" wx:key="playerOpenid" class="stat-record-row">

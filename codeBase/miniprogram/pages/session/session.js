@@ -525,10 +525,10 @@ Page({
         : []
       const now = Date.now()
       const sessionOpen = Number(activity.startTime) - SESSION_OPEN_LEAD_MS <= now
-      // 开启界龙杯后立即展示积分榜与轮次；未开启界龙杯则在开赛前 2 小时自动开放轮次与个人数据（无积分榜）
+      // 开启界龙杯后立即展示积分榜、轮次与管理员记球员数据；未开启界龙杯则在开赛前 2 小时自动开放轮次与个人数据（无积分榜）
       const showStandings = !!(cupStarted && standings.length)
       const showFixtures = !!(divided && (cupStarted || sessionOpen))
-      const showPersonalData = !!(sessionOpen && isAdmin)
+      const showPersonalData = !!((sessionOpen || cupStarted) && isAdmin)
       const cupEligible = (activeTeamCount === 4 || activeTeamCount === 5) && activePlayerCount >= 24
       let cupActionHint = ''
       if (!cupEligible) {
@@ -876,14 +876,15 @@ Page({
       return
     }
     wx.showModal({
-      title: '按组分队？',
-      content: '按分组落到 6 个场次队（两行三列）。空队可再手动并人后删掉。',
-      confirmText: '分 6 队',
+      title: '一键分队？',
+      content: '按 8 人制（2～5 队）自动均分，同名册组优先分在同一队；超过 45 人时晚报名者留在未分队池。分完可随时拖拽微调。',
+      confirmText: '一键分队',
+      confirmColor: '#0f3d2e',
       success: (res) => {
         if (!res.confirm) return
         call('assignTeams', { activityId: this.data.id }).then((result) => {
-          const fixtures = result.fixtureCount ? `，对阵 ${result.fixtureCount} 场` : ''
-          wx.showToast({ title: `已分成 6 队${fixtures}`.slice(0, 30), icon: 'none' })
+          const left = result.leftoverCount ? `，未分队 ${result.leftoverCount} 人` : ''
+          wx.showToast({ title: `已分成 ${result.teamCount} 队${left}`.slice(0, 30), icon: 'none' })
           this.load()
         })
       }
@@ -1675,6 +1676,9 @@ Page({
   },
   onMemberTeam(event) {
     const memberTeam = event.currentTarget.dataset.id
+    this.applyMemberTeamFilter(memberTeam)
+  },
+  applyMemberTeamFilter(memberTeam) {
     const pickMembers = memberTeam === 'all'
       ? this.data.signedMembers
       : this.data.signedMembers.filter((item) => item.teamId === memberTeam)
@@ -1690,6 +1694,16 @@ Page({
       assistIndex: still ? (stat.assists || 0) : 0,
       ownGoalIndex: still ? (stat.ownGoals || 0) : 0,
       pigeonIndex: still && stat.absent ? 1 : 0
+    })
+  },
+  jumpToMatchPlayerStats(event) {
+    const teamAId = event.currentTarget.dataset.teama || 'all'
+    if (teamAId && (this.data.memberFilters || []).some((f) => f.id === teamAId)) {
+      this.applyMemberTeamFilter(teamAId)
+    }
+    wx.pageScrollTo({
+      selector: '#personal-stats-card',
+      duration: 260
     })
   },
   onPickPlayer(event) {
