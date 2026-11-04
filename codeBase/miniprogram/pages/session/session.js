@@ -533,11 +533,11 @@ Page({
       let cupActionHint = ''
       if (!cupEligible) {
         if (activeTeamCount === 6) {
-          cupActionHint = '6 支非空队不支持一键开赛（仅 4 或 5 队）'
+          cupActionHint = '6 支非空队不支持界龙杯（开赛前 2h 可直接记比分与进球/助攻/乌龙/出勤）'
         } else if (activeTeamCount < 4) {
-          cupActionHint = `需 4 或 5 支非空队（当前 ${activeTeamCount}）且 ≥24 人`
+          cupActionHint = `界龙杯需 4 或 5 队且 ≥24 人（当前 ${activeTeamCount} 队 ${activePlayerCount} 人；不开杯也可在开赛前 2h 记数据）`
         } else {
-          cupActionHint = `需队内正选 ≥24 人（当前 ${activePlayerCount}）`
+          cupActionHint = `界龙杯需队内 ≥24 人（当前 ${activePlayerCount} 人；不开杯也可在开赛前 2h 记数据）`
         }
       }
       const cupActionEnabled = !!(isAdmin && (cupStarted || cupEligible))
@@ -1325,7 +1325,7 @@ Page({
       if (!eligible) {
         wx.showModal({
           title: '暂不满足开赛条件',
-          content: `开启界龙杯需满足：非空队伍数为 4 或 5 支（当前 ${activeTeamCount} 支），且队内总人数不少于 24 人（当前 ${activePlayerCount} 人）。`,
+          content: `开启界龙杯需满足：非空队伍数为 4 或 5 支（当前 ${activeTeamCount} 支），且队内总人数不少于 24 人（当前 ${activePlayerCount} 人）。不开界龙杯也可在开赛前 2 小时直接记录轮次比分与球员进球/助攻/乌龙/出勤。`,
           showCancel: false,
           confirmText: '知道了'
         })

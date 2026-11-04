@@ -360,7 +360,7 @@
         </view>
 
         <view wx:if="{{isAdmin}}" class="fixture-actions">
-          <text wx:if="{{item.scored && showPersonalData}}" class="tiny link" data-teama="{{item.teamAId}}" data-teamb="{{item.teamBId}}" bindtap="jumpToMatchPlayerStats">⚽️ 记本场进球/助攻 ›</text>
+          <text wx:if="{{item.scored && showPersonalData}}" class="tiny link" data-teama="{{item.teamAId}}" data-teamb="{{item.teamBId}}" bindtap="jumpToMatchPlayerStats">⚽️ 记本场进球/助攻/乌龙 ›</text>
           <text wx:if="{{!item.scored}}" class="tiny link" data-id="{{item._id}}" bindtap="openEditFixture">修改场次</text>
           <text wx:if="{{!item.scored}}" class="tiny link" data-id="{{item._id}}" bindtap="swapFixtureSides">对调主客</text>
           <text wx:if="{{group.matches.length === 1}}" class="tiny link" data-round="{{item.roundNo}}" bindtap="swapPitch">切1/2号场</text>
