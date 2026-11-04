@@ -1156,6 +1156,4 @@ module.exports = {
   clubStats
 }
 
-}
-
 
