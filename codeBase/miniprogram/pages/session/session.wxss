@@ -155,6 +155,48 @@
   background: #0f3d2e;
   color: #fff;
 }
+.roster-action-pill.disabled {
+  background: #e4ebe6;
+  color: #8a9691;
+}
+.cup-action-bar {
+  margin-top: 20rpx;
+  padding: 8rpx 4rpx 4rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10rpx;
+}
+.cup-action-bar .roster-action-pill {
+  text-align: center;
+  padding: 18rpx 22rpx;
+  border-radius: 16rpx;
+}
+.cup-action-hint {
+  font-size: 22rpx;
+  color: #8a9691;
+  line-height: 1.4;
+}
+.podium-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 14rpx 0;
+  border-bottom: 1rpx solid rgba(15, 61, 46, 0.06);
+  font-size: 28rpx;
+}
+.podium-row:last-child {
+  border-bottom: none;
+}
+.podium-place {
+  width: 72rpx;
+  font-weight: 700;
+  color: #0f3d2e;
+}
+.podium-name {
+  font-weight: 600;
+  color: #1c2421;
+}
 .warn-banner {
   background: #fff9e6;
   color: #7a5210;

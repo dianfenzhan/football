@@ -13,7 +13,7 @@ const JIELONG_GROUPS = [
   { id: 'jl_shangxin', name: '伤心🇮🇹', color: '#e6b325', jerseyColor: '黄' },
   { id: 'jl_tangmu', name: '汤姆🐻', color: '#3d5a80', jerseyColor: '蓝' },
   { id: 'jl_aiqing', name: '爱情🔥', color: '#c44536', jerseyColor: '红' },
-  { id: 'jl_other', name: '散客⚽️', color: '#1c2421', jerseyColor: '黑' }
+  { id: 'jl_other', name: '未分组', color: '#66706c', jerseyColor: '灰' }
 ]
 
 function roleLabel(role) {
@@ -39,7 +39,7 @@ function decorateClubs(clubs, multiReady) {
         ...club,
         groupId: effectiveGroupId,
         groups,
-        currentGroupName: current ? current.name : (club._id === 'club_jielong' ? '散客⚽️' : ''),
+        currentGroupName: current ? current.name : (club._id === 'club_jielong' ? '未分组' : ''),
         hasGroups: groups.length > 0,
         roleLabel: roleLabel(club.role),
         canEditGroup: !!multiReady

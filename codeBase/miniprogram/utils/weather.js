@@ -234,8 +234,12 @@ function loadActivityWeather(startTime) {
       fail: () => reject(new Error('天气服务请求失败'))
     })
   })
-  // 体验版会校验 request 合法域名；直连失败时改走云函数，避免首页空白。
-  return requestJson(url).then(fromForecast).catch(() => fromCloud())
+  // 最多 3 次：Open-Meteo 两次（首请求+1 次重试），再走云函数备选。
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+  return requestJson(url)
+    .then(fromForecast)
+    .catch(() => wait(400).then(() => requestJson(url).then(fromForecast)))
+    .catch(() => fromCloud())
 }
 
 module.exports = {

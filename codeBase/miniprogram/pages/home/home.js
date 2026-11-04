@@ -64,6 +64,8 @@ Page({
   data: {
     next: null,
     weather: null,
+    weatherFailed: false,
+    weatherLoading: false,
     loading: true,
     signedTeamName: '',
     clubs: [],
@@ -152,9 +154,11 @@ Page({
     }).catch(() => this.setData({ loading: false, weather: null }))
   },
   loadWeather(startTime) {
+    if (!startTime) return
+    this.setData({ weatherLoading: true, weatherFailed: false })
     loadActivityWeather(startTime).then((result) => {
       if (!(result.hours || []).length) {
-        this.setData({ weather: null })
+        this.setData({ weather: null, weatherFailed: true, weatherLoading: false })
         return
       }
       this.setData({
@@ -164,9 +168,16 @@ Page({
           sunset: result.sunset || '',
           defaultIndex: typeof result.defaultIndex === 'number' ? result.defaultIndex : 0,
           venueAddress: result.venueAddress || '上海市浦东新区川沙镇界龙足球基地'
-        }
+        },
+        weatherFailed: false,
+        weatherLoading: false
       })
-    }).catch(() => this.setData({ weather: null }))
+    }).catch(() => this.setData({ weather: null, weatherFailed: true, weatherLoading: false }))
+  },
+  retryWeather() {
+    const next = this.data.next
+    if (!next || !next.startTime || this.data.weatherLoading) return
+    this.loadWeather(next.startTime)
   },
   open(event) {
     const id = event.currentTarget.dataset.id

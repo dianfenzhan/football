@@ -53,7 +53,7 @@ test('jielong has roster groups and uses pool signup', () => {
   assert.equal(remindLeadMs(CLUB_JIELONG), 2 * 60 * 60 * 1000)
 })
 
-test('join jielong without group defaults to 散客; wednesday still needs a group', () => {
+test('join jielong without group defaults to 未分组; wednesday still needs a group', () => {
   const owner = membershipView({ canGrantAdmin: true, isAdmin: true, teamId: 'team_jiong' }, CLUB_JIELONG)
   const plain = membershipView({ memberships: [{ clubId: CLUB_JIELONG, role: 'member' }] }, CLUB_JIELONG)
   const outsider = membershipView({ name: '只在周三联', teamId: 'team_jiong' }, CLUB_JIELONG)

@@ -39,14 +39,7 @@
         <text wx:if="{{item.isCaptain}}" class="admin-tag">队长</text>
         <text wx:elif="{{item.clubAdminTag}}" class="admin-tag">{{item.clubAdminTag}}</text>
       </view>
-      <view class="muted sub" wx:if="{{item.metaText && !item.currentClubStats}}">{{item.metaText}}</view>
-      <view class="player-stats-line" wx:if="{{canEditPlayers && item.currentClubStats}}">
-        <text class="ps-pill">总活动 {{item.currentClubStats.activities}}</text>
-        <text class="ps-pill">进球 {{item.currentClubStats.goals}}</text>
-        <text class="ps-pill">助攻 {{item.currentClubStats.assists}}</text>
-        <text class="ps-pill">乌龙 {{item.currentClubStats.ownGoals}}</text>
-        <text class="ps-pill">鸽子 {{item.currentClubStats.absences}}</text>
-      </view>
+      <view class="muted sub" wx:if="{{item.metaText}}">{{item.metaText}}</view>
     </view>
     <view class="player-right" catchtap="noop">
       <text class="pos-badge">{{item.positionLabel}}</text>

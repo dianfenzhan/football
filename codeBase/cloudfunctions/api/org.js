@@ -13,6 +13,7 @@ const {
   SESSION_TEAM_STYLES,
   CLUB_SEEDS,
   clubSeed,
+  buildSessionTeams,
   pigeonCutoffHours,
   membershipView,
   withClubMembership,
@@ -20,7 +21,6 @@ const {
   recolorGroup,
   reorderGroups,
   divideByRosterGroups,
-  autoSessionPlacement,
   placeInPool,
   assertAdminMove,
   rosterLocked,
@@ -115,6 +115,21 @@ async function ensureOrg() {
       if (existing.data && existing.data.name !== seed.name) patch.name = seed.name
       if ((seed.groups || []).length && !(existing.data && existing.data.groups && existing.data.groups.length)) {
         patch.groups = seed.groups
+      } else if ((seed.groups || []).length && existing.data && existing.data.groups && existing.data.groups.length) {
+        // 仅把旧「散客」名册组迁成「未分组」，不覆盖管理员已改名的其它组
+        let changed = false
+        const nextGroups = existing.data.groups.map((group) => {
+          if (!group || group.id !== JIELONG_DEFAULT_GROUP) return group
+          if (!/散客/.test(String(group.name || ''))) return group
+          changed = true
+          const seedGroup = seed.groups.find((item) => item.id === JIELONG_DEFAULT_GROUP) || {}
+          return Object.assign({}, group, {
+            name: seedGroup.name || '未分组',
+            color: seedGroup.color || group.color,
+            jerseyColor: seedGroup.jerseyColor || group.jerseyColor
+          })
+        })
+        if (changed) patch.groups = nextGroups
       }
       if (Object.keys(patch).length) {
         await db.collection('clubs').doc(seed._id).update({ data: patch })
@@ -198,7 +213,7 @@ async function joinClub(openid, event) {
     if (!group) throw new Error('请选择分组')
     groupId = group.id
   } else if (club._id === CLUB_JIELONG) {
-    // 名册组必选；未传或非法时落到「散客⚽️」
+    // 名册组必选；未传或非法时落到「未分组」
     groupId = resolveJielongGroupId(club, event.groupId)
   }
   const current = membershipView(user, club._id)
@@ -297,6 +312,7 @@ async function createActivity(openid, event) {
   if (!title) throw new Error('请填写标题')
   if (!location) throw new Error('请填写地点')
   if (!startTime) throw new Error('请选择时间')
+  const seedTeams = buildSessionTeams(2)
   const added = await db.collection('activities').add({
     data: {
       title,
@@ -309,11 +325,11 @@ async function createActivity(openid, event) {
       venueId: VENUE_JIELONG._id,
       sessionType: 'kick',
       pitchIds: ['pitch_1', 'pitch_2'],
-      teams: [],
-      teamCount: 0,
+      teams: seedTeams,
+      teamCount: seedTeams.length,
       targetPerTeam: club.config.defaultTeamSize || 8,
-      divided: false,
-      manualRoster: false,
+      divided: true,
+      manualRoster: true,
       cupStarted: false,
       cupTeamIds: [],
       createdBy: openid,
@@ -378,26 +394,14 @@ async function signup(openid, event) {
     view = membershipView({ ...user, memberships }, CLUB_JIELONG)
   }
   const placed = placeInPool()
-  const manualRoster = !!(activity.manualRoster || activity.cupStarted)
   const teamSize = activity.targetPerTeam || club.config.defaultTeamSize || 8
-  let placement = null
-  let assignedTeamId = PENDING_TEAM
+  const assignedTeamId = PENDING_TEAM
   await db.runTransaction(async (transaction) => {
     const existing = await transaction.collection('signups').where({
       activityId: activity._id, _openid: openid
     }).limit(1).get()
     const current = existing.data[0]
     if (current && (current.status === 'signed' || current.status === 'waitlist')) throw new Error('你已经报名了')
-    if (!manualRoster) {
-      const allSigned = await transaction.collection('signups').where({
-        activityId: activity._id, status: 'signed'
-      }).limit(100).get()
-      const livePlacement = autoSessionPlacement(allSigned.data.length, activity.teams || [], teamSize)
-      placement = livePlacement
-      assignedTeamId = livePlacement.teamId
-    } else {
-      assignedTeamId = PENDING_TEAM
-    }
     const sessionOrder = await nextSessionOrder(transaction, activity._id, assignedTeamId)
     const data = {
       activityId: activity._id,
@@ -426,13 +430,18 @@ async function signup(openid, event) {
       data: { absent: false, absentBy: '', pigeonAt: 0, updatedAt: Date.now() }
     })
   }
-  if (!manualRoster && placement) {
+  // 旧场次可能尚未建队壳：补齐 A/B 空队，报名一律进未分队池
+  const seedTeams = (activity.teams && activity.teams.length)
+    ? activity.teams
+    : buildSessionTeams(2)
+  if (!activity.divided || !activity.manualRoster || !(activity.teams && activity.teams.length)) {
     await db.collection('activities').doc(activity._id).update({
       data: {
-        teams: placement.teams,
-        teamCount: placement.teamCount,
+        teams: seedTeams,
+        teamCount: seedTeams.length,
         targetPerTeam: teamSize,
         divided: true,
+        manualRoster: true,
         updatedAt: Date.now()
       }
     })
@@ -1146,3 +1155,7 @@ module.exports = {
   deleteGoalEvent,
   clubStats
 }
+
+}
+
+

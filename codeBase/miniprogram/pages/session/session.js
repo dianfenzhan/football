@@ -23,16 +23,16 @@ const JIELONG_GROUPS = [
   { id: 'jl_shangxin', name: '伤心🇮🇹', color: '#e6b325' },
   { id: 'jl_tangmu', name: '汤姆🐻', color: '#3d5a80' },
   { id: 'jl_aiqing', name: '爱情🔥', color: '#c44536' },
-  { id: 'jl_other', name: '散客⚽️', color: '#1c2421' }
+  { id: 'jl_other', name: '未分组', color: '#66706c' }
 ]
 /** 与云函数 SESSION_TEAM_STYLES 对齐；对阵引用已删队时的兜底名 */
 const SESSION_TEAM_FALLBACK = {
-  sess_a: { name: '红队', color: '#c44536' },
-  sess_b: { name: '白队', color: '#f4f4f4' },
-  sess_c: { name: '黄队', color: '#e6b325' },
-  sess_d: { name: '绿队', color: '#1d6b50' },
-  sess_e: { name: '蓝队', color: '#3d5a80' },
-  sess_f: { name: '黑队', color: '#1c2421' }
+  sess_a: { name: 'A队', color: '#c44536' },
+  sess_b: { name: 'B队', color: '#f4f4f4' },
+  sess_c: { name: 'C队', color: '#e6b325' },
+  sess_d: { name: 'D队', color: '#1d6b50' },
+  sess_e: { name: 'E队', color: '#3d5a80' },
+  sess_f: { name: 'F队', color: '#1c2421' }
 }
 
 function sessionTeamLabel(teamId, teamNameMap) {
@@ -108,6 +108,45 @@ function standingsOf(teams, rounds) {
   list.forEach((row) => { row.gd = row.gf - row.ga })
   list.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf)
   return list
+}
+
+function teamMeta(teams, teamId) {
+  const hit = (teams || []).find((t) => t.id === teamId)
+  return hit
+    ? { id: hit.id, name: hit.name, color: hit.color }
+    : { id: teamId, name: sessionTeamLabel(teamId), color: sessionTeamColor(teamId) }
+}
+
+/** 4 队：决赛+季军赛记满后出领奖台；5 队：小组赛全部记满后按积分前三 */
+function buildPodium(teams, rounds, cupTeamCount) {
+  const count = Number(cupTeamCount) || (teams || []).length
+  const list = teams || []
+  const allRounds = rounds || []
+  if (count === 4) {
+    const final = allRounds.find((r) => r.matchType === 'final' && r.scoreA != null && r.scoreB != null)
+    const third = allRounds.find((r) => r.matchType === 'third' && r.scoreA != null && r.scoreB != null)
+    if (!final || !third) return []
+    if (Number(final.scoreA) === Number(final.scoreB)) return []
+    if (Number(third.scoreA) === Number(third.scoreB)) return []
+    const champId = Number(final.scoreA) > Number(final.scoreB) ? final.teamAId : final.teamBId
+    const secondId = champId === final.teamAId ? final.teamBId : final.teamAId
+    const thirdId = Number(third.scoreA) > Number(third.scoreB) ? third.teamAId : third.teamBId
+    return [
+      Object.assign({ place: '冠军', placeRank: 1 }, teamMeta(list, champId)),
+      Object.assign({ place: '亚军', placeRank: 2 }, teamMeta(list, secondId)),
+      Object.assign({ place: '季军', placeRank: 3 }, teamMeta(list, thirdId))
+    ]
+  }
+  if (count === 5) {
+    const group = allRounds.filter((r) => r.matchType !== 'final' && r.matchType !== 'third')
+    if (group.length < 10 || group.some((r) => r.scoreA == null || r.scoreB == null)) return []
+    const table = standingsOf(list, allRounds)
+    return table.slice(0, 3).map((row, idx) => Object.assign({
+      place: idx === 0 ? '冠军' : (idx === 1 ? '亚军' : '季军'),
+      placeRank: idx + 1
+    }, row))
+  }
+  return []
 }
 
 const CN_NUMS = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
@@ -247,6 +286,20 @@ Page({
     showRename: false,
     renameTeamId: '',
     renameDraft: '',
+    renameColor: '',
+    renameJerseyColor: '',
+    colorPresets: [
+      { id: 'red', label: '红', color: '#c44536' },
+      { id: 'white', label: '白', color: '#f4f4f4' },
+      { id: 'yellow', label: '黄', color: '#e6b325' },
+      { id: 'green', label: '绿', color: '#1d6b50' },
+      { id: 'blue', label: '蓝', color: '#3d5a80' },
+      { id: 'black', label: '黑', color: '#1c2421' },
+      { id: 'gray', label: '灰', color: '#66706c' }
+    ],
+    cupActionEnabled: false,
+    cupActionHint: '',
+    podium: [],
     showFixtureModal: false,
     fixtureEditId: '',
     fixtureRoundNo: 1,
@@ -367,7 +420,7 @@ Page({
         ? club.groups
         : JIELONG_GROUPS
       const groupInRoster = (groupId) => !!(groupId && rosterGroups.some((g) => (g.id || g._id) === groupId))
-      // 已入队且名册为空时与后端一致，按「散客⚽️」计，避免每次报名再弹确认资料
+      // 已入队且名册为空时与后端一致，按「未分组」计，避免每次报名再弹确认资料
       const rawGroup = (club && club.groupId)
         || (((me && me.memberships) || []).find((m) => m && m.clubId === 'club_jielong') || {}).groupId
         || ''
@@ -467,12 +520,27 @@ Page({
       )
       const pitchOneSummary = countPitchOneByTeams(cupStarted ? cupTeams : activeTeams, rounds)
       const standings = cupStarted ? standingsOf(cupTeams, detail.rounds || []) : []
+      const podium = cupStarted
+        ? buildPodium(cupTeams, detail.rounds || [], cupTeamCount || cupTeams.length)
+        : []
       const now = Date.now()
       const sessionOpen = Number(activity.startTime) - SESSION_OPEN_LEAD_MS <= now
       // 开启界龙杯后立即展示积分榜与轮次；未开启界龙杯则在开赛前 2 小时自动开放轮次与个人数据（无积分榜）
       const showStandings = !!(cupStarted && standings.length)
       const showFixtures = !!(divided && (cupStarted || sessionOpen))
       const showPersonalData = !!(sessionOpen && isAdmin)
+      const cupEligible = (activeTeamCount === 4 || activeTeamCount === 5) && activePlayerCount >= 24
+      let cupActionHint = ''
+      if (!cupEligible) {
+        if (activeTeamCount === 6) {
+          cupActionHint = '6 支非空队不支持一键开赛（仅 4 或 5 队）'
+        } else if (activeTeamCount < 4) {
+          cupActionHint = `需 4 或 5 支非空队（当前 ${activeTeamCount}）且 ≥24 人`
+        } else {
+          cupActionHint = `需队内正选 ≥24 人（当前 ${activePlayerCount}）`
+        }
+      }
+      const cupActionEnabled = !!(isAdmin && (cupStarted || cupEligible))
       const allSignedPlayers = signedList.map((item) => ({
         openid: item._openid,
         name: item.userName,
@@ -601,6 +669,9 @@ Page({
         pitchOneSummary,
         scoreDraft,
         standings,
+        podium,
+        cupActionEnabled,
+        cupActionHint,
         allSignedPlayers,
         memberFilters,
         signedMembers,
@@ -1016,7 +1087,9 @@ Page({
     this.setData({
       showRename: true,
       renameTeamId: teamId,
-      renameDraft: team.name
+      renameDraft: team.name,
+      renameColor: team.color || '#66706c',
+      renameJerseyColor: team.jerseyColor || ''
     })
   },
   openBasics() {
@@ -1097,15 +1170,51 @@ Page({
     })
   },
   closeRename() {
-    this.setData({ showRename: false, renameTeamId: '', renameDraft: '' })
+    this.setData({
+      showRename: false,
+      renameTeamId: '',
+      renameDraft: '',
+      renameColor: '',
+      renameJerseyColor: ''
+    })
   },
   onRenameDraft(event) {
     this.setData({ renameDraft: event.detail.value })
   },
+  onPickRenameColor(event) {
+    const color = event.currentTarget.dataset.color
+    const label = event.currentTarget.dataset.label || ''
+    if (!color) return
+    this.setData({
+      renameColor: color,
+      renameJerseyColor: label || this.data.renameJerseyColor
+    })
+  },
   onPickRenameName(event) {
     const name = event.currentTarget.dataset.name
     if (!name) return
-    this.setData({ renameDraft: name })
+    const group = (this.data.rosterGroups || []).find((item) => item.name === name)
+    const applyGroup = () => {
+      this.setData({
+        renameDraft: name,
+        renameColor: (group && group.color) || this.data.renameColor,
+        renameJerseyColor: (group && (group.jerseyColor || group.name)) || this.data.renameJerseyColor
+      })
+    }
+    if (group && group.color && this.data.renameColor && group.color !== this.data.renameColor) {
+      wx.showModal({
+        title: '同步球衣颜色？',
+        content: `选用「${name}」会把球衣色改为该组颜色，保存前仍可再改。`,
+        confirmText: '同步颜色',
+        cancelText: '只改队名',
+        success: (res) => {
+          if (res.confirm) applyGroup()
+          else this.setData({ renameDraft: name })
+        }
+      })
+      return
+    }
+    applyGroup()
   },
   submitRename() {
     const teamId = this.data.renameTeamId
@@ -1114,11 +1223,15 @@ Page({
       wx.showToast({ title: '请填写队名', icon: 'none' })
       return
     }
-    const matchedGroup = (this.data.rosterGroups || []).find((item) => item.name === name)
-    const payload = { activityId: this.data.id, teamId, name }
-    if (matchedGroup && matchedGroup.color) payload.color = matchedGroup.color
+    const payload = {
+      activityId: this.data.id,
+      teamId,
+      name,
+      color: this.data.renameColor || undefined,
+      jerseyColor: this.data.renameJerseyColor || undefined
+    }
     call('setSessionColor', payload).then(() => {
-      this.setData({ showRename: false, renameTeamId: '', renameDraft: '' })
+      this.closeRename()
       this.load()
     })
   },

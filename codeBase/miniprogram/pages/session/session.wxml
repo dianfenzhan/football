@@ -35,10 +35,6 @@
   <view class="card" wx:if="{{!divided}}">
     <view class="roster-bar">
       <view class="section-title" style="margin-bottom: 0;">已报名 {{signedCount}} 人</view>
-      <view wx:if="{{isAdmin}}" class="roster-bar-actions">
-        <view wx:if="{{!locked}}" class="roster-action-pill" bindtap="assignByRoster">按组分队</view>
-        <view class="roster-action-pill primary" bindtap="onTapJielongCup">{{cupStarted ? '重开界龙杯' : '开启界龙杯'}}</view>
-      </view>
     </view>
     <view wx:if="{{!signedCount}}" class="empty">还没有人报名</view>
   </view>
@@ -48,10 +44,6 @@
       <view class="roster-bar-title">
         <text class="section-title" style="margin-bottom: 0;">分队名单</text>
         <text class="roster-bar-sub">{{activeTeamCount}} 队 · {{activePlayerCount}} 人</text>
-      </view>
-      <view class="roster-bar-actions">
-        <view wx:if="{{isAdmin && !locked}}" class="roster-action-pill" bindtap="assignByRoster">按组分队</view>
-        <view wx:if="{{isAdmin}}" class="roster-action-pill primary" bindtap="onTapJielongCup">{{cupStarted ? '重开界龙杯' : '开启界龙杯'}}</view>
       </view>
     </view>
     <view class="muted roster-tip" wx:if="{{isAdmin && draggingId}}">{{dragHint}}</view>
@@ -137,6 +129,14 @@
           </view>
         </view>
       </view>
+    </view>
+
+    <view wx:if="{{isAdmin}}" class="cup-action-bar">
+      <view
+        class="roster-action-pill {{cupActionEnabled ? 'primary' : 'disabled'}}"
+        bindtap="onTapJielongCup"
+      >{{cupStarted ? '重开界龙杯' : '开启界龙杯'}}</view>
+      <text wx:if="{{cupActionHint}}" class="cup-action-hint">{{cupActionHint}}</text>
     </view>
   </block>
 
@@ -258,8 +258,17 @@
     </view>
   </view>
 
+  <view class="card" wx:if="{{podium.length}}">
+    <view class="section-title">领奖台</view>
+    <view wx:for="{{podium}}" wx:key="placeRank" class="podium-row">
+      <text class="podium-place">{{item.place}}</text>
+      <view class="dot" style="background: {{item.color}};"></view>
+      <text class="podium-name">{{item.name}}</text>
+    </view>
+  </view>
+
   <view class="card" wx:if="{{showStandings}}">
-    <view class="section-title">积分榜</view>
+    <view class="section-title">{{cupTeamCount === 4 ? '小组赛积分榜' : '积分榜'}}</view>
     <view class="table-head">
       <text class="col-name">队</text>
       <text class="col">分</text>
@@ -512,9 +521,9 @@
 
   <view wx:if="{{showRename}}" class="share-mask" catchtouchmove="noop">
     <view class="share-sheet">
-      <view class="title">改队名</view>
-      <view class="muted">可点名册组名填入，也可直接改字，选完还能再改。</view>
-      <view class="roster-label">名册组名</view>
+      <view class="title">改队名 / 球衣色</view>
+      <view class="muted">点名册组可带出队名与球衣色；也可只改其一。</view>
+      <view class="roster-label">名册组</view>
       <view class="roster-chips">
         <view
           wx:for="{{rosterGroups}}"
@@ -529,6 +538,20 @@
       </view>
       <view class="roster-label">队名</view>
       <input class="input reg-input" value="{{renameDraft}}" bindinput="onRenameDraft" placeholder="输入队名"/>
+      <view class="roster-label">球衣颜色</view>
+      <view class="roster-chips">
+        <view
+          wx:for="{{colorPresets}}"
+          wx:key="id"
+          class="roster-chip {{renameColor === item.color ? 'on' : ''}}"
+          data-color="{{item.color}}"
+          data-label="{{item.label}}"
+          bindtap="onPickRenameColor"
+        >
+          <view class="dot" style="background: {{item.color}};"></view>
+          <text>{{item.label}}</text>
+        </view>
+      </view>
       <button class="btn" bindtap="submitRename">保存</button>
       <button class="btn soft" bindtap="closeRename">取消</button>
     </view>

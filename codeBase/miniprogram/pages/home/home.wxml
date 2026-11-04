@@ -52,6 +52,11 @@
             embedded="{{true}}"
           />
         </view>
+        <view wx:elif="{{weatherLoading}}" class="weather-retry muted">天气加载中…</view>
+        <view wx:elif="{{weatherFailed}}" class="weather-retry" catchtap="retryWeather">
+          <text class="muted">天气暂时不可用</text>
+          <text class="weather-retry-btn">点此重试</text>
+        </view>
       </view>
     </block>
     <view wx:elif="{{!noClub}}" class="hero hero-empty">

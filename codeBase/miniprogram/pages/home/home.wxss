@@ -165,6 +165,23 @@
   border-top: 1rpx solid rgba(15, 61, 46, 0.06);
 }
 
+.weather-retry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 20rpx 24rpx;
+  background: #edf5f0;
+  border-top: 1rpx solid rgba(15, 61, 46, 0.06);
+  font-size: 24rpx;
+}
+
+.weather-retry-btn {
+  color: #0f3d2e;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 .hero-empty {
   background: linear-gradient(165deg, #123f30 0%, #1f6a4f 100%);
   color: #fff;

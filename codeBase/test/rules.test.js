@@ -313,7 +313,7 @@ test('擅长位置校验、分组战术板校验与本组人员过滤', () => {
   const beforeRename = resolveActivityTacticsGroups({
     clubId: 'club_jielong',
     divided: true,
-    teams: [{ id: 'sess_a', name: '红队', color: '#c44536' }, { id: 'sess_b', name: '蓝队', color: '#3d5a80' }]
+    teams: [{ id: 'sess_a', name: 'A队', color: '#c44536' }, { id: 'sess_b', name: 'B队', color: '#3d5a80' }]
   })
   const afterRename = resolveActivityTacticsGroups({
     clubId: 'club_jielong',

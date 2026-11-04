@@ -28,12 +28,12 @@ const PENDING_TEAM = 'team_pending'
 const JIELONG_DEFAULT_GROUP = 'jl_other'
 
 const SESSION_TEAM_STYLES = [
-  { id: 'sess_a', name: '红队', jerseyColor: '红', color: '#c44536' },
-  { id: 'sess_b', name: '白队', jerseyColor: '白', color: '#f4f4f4' },
-  { id: 'sess_c', name: '黄队', jerseyColor: '黄', color: '#e6b325' },
-  { id: 'sess_d', name: '绿队', jerseyColor: '绿', color: '#1d6b50' },
-  { id: 'sess_e', name: '蓝队', jerseyColor: '蓝', color: '#3d5a80' },
-  { id: 'sess_f', name: '黑队', jerseyColor: '黑', color: '#1c2421' }
+  { id: 'sess_a', name: 'A队', jerseyColor: '红', color: '#c44536' },
+  { id: 'sess_b', name: 'B队', jerseyColor: '白', color: '#f4f4f4' },
+  { id: 'sess_c', name: 'C队', jerseyColor: '黄', color: '#e6b325' },
+  { id: 'sess_d', name: 'D队', jerseyColor: '绿', color: '#1d6b50' },
+  { id: 'sess_e', name: 'E队', jerseyColor: '蓝', color: '#3d5a80' },
+  { id: 'sess_f', name: 'F队', jerseyColor: '黑', color: '#1c2421' }
 ]
 
 const CLUB_SEEDS = [
@@ -65,7 +65,7 @@ const CLUB_SEEDS = [
       { id: 'jl_shangxin', name: '伤心🇮🇹', jerseyColor: '黄', color: '#e6b325' },
       { id: 'jl_tangmu', name: '汤姆🐻', jerseyColor: '蓝', color: '#3d5a80' },
       { id: 'jl_aiqing', name: '爱情🔥', jerseyColor: '红', color: '#c44536' },
-      { id: 'jl_other', name: '散客⚽️', jerseyColor: '黑', color: '#1c2421' }
+      { id: 'jl_other', name: '未分组', jerseyColor: '灰', color: '#66706c' }
     ],
     config: {
       cancelSignedCutoffHours: 1.5,
@@ -127,7 +127,7 @@ function membershipView(user, clubId) {
     || (user && user.canGrantAdmin)
     || (clubId === CLUB_WEDNESDAY && user && (user.teamId || user.isAdmin))
   )
-  // 界龙已入队但未写名册组 → 视为「散客⚽️」（与「我的」展示、报名兜底一致）
+  // 界龙已入队但未写名册组 → 视为「未分组」（与「我的」展示、报名兜底一致）
   if (!groupId && joined && clubId === CLUB_JIELONG) groupId = JIELONG_DEFAULT_GROUP
   return { role, groupId, joined }
 }
